@@ -68,6 +68,7 @@ body {
   margin-bottom: 2.5rem;
   padding-bottom: 1.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 1rem;
 }
 
 .logo-section {
@@ -94,6 +95,8 @@ body {
 .nav-actions {
   display: flex;
   gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 /* Buttons */
@@ -109,6 +112,7 @@ body {
   border: none;
   cursor: pointer;
   transition: var(--transition);
+  white-space: nowrap;
 }
 
 .btn-primary {
@@ -153,13 +157,6 @@ body {
   gap: 1.5rem;
   margin-bottom: 3rem;
   align-items: flex-end;
-}
-
-@media (max-width: 768px) {
-  .podium-container {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
 }
 
 .podium-card {
@@ -259,7 +256,7 @@ body {
   border-radius: 4px;
 }
 
-/* Glassmorphism main dashboard grid */
+/* Dashboard Grid */
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -281,6 +278,8 @@ body {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .table-title {
@@ -305,6 +304,13 @@ body {
   box-shadow: 0 0 10px rgba(0, 242, 148, 0.1);
 }
 
+/* Wrapper for horizontal scrolling tables on mobile */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .custom-table {
   width: 100%;
   border-collapse: collapse;
@@ -319,6 +325,7 @@ body {
   color: hsl(var(--text-muted));
   letter-spacing: 0.5px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
 }
 
 .custom-table td {
@@ -326,6 +333,7 @@ body {
   font-size: 0.95rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.02);
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .custom-table tr:last-child td {
@@ -349,6 +357,7 @@ body {
 
 .name-col {
   font-weight: 600;
+  white-space: normal !important; /* Allow names to wrap if extremely long */
 }
 
 .points-col {
@@ -374,7 +383,7 @@ body {
 
 .groups-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.5rem;
 }
 
@@ -403,6 +412,7 @@ body {
   padding: 0.75rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   font-size: 0.85rem;
+  gap: 0.5rem;
 }
 
 .match-row:last-child {
@@ -414,16 +424,23 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  min-width: 0; /* Enable text truncation for safety */
 }
 
 .team-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .team-name {
   color: hsl(var(--text-sub));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .team-name.bold {
@@ -437,6 +454,8 @@ body {
   background-color: rgba(255, 255, 255, 0.05);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
+  font-size: 0.8rem;
+  flex-shrink: 0;
 }
 
 .score-display {
@@ -445,6 +464,7 @@ body {
   align-items: center;
   gap: 0.25rem;
   width: 90px;
+  flex-shrink: 0;
 }
 
 .pred-box {
@@ -458,6 +478,7 @@ body {
   justify-content: center;
   align-items: center;
   gap: 4px;
+  width: 100%;
 }
 
 .points-badge {
@@ -584,7 +605,7 @@ body {
 
 .admin-match-card {
   display: grid;
-  grid-template-columns: 1fr 150px;
+  grid-template-columns: 1fr 160px;
   align-items: center;
   background-color: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -592,6 +613,7 @@ body {
   padding: 1rem;
   margin-bottom: 1rem;
   transition: var(--transition);
+  gap: 1rem;
 }
 
 .admin-match-card:hover {
@@ -607,6 +629,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 .score-input {
@@ -627,16 +650,7 @@ body {
   border-color: hsl(var(--primary));
 }
 
-/* Animations */
-@keyframes pulse {
-  0% {
-    filter: drop-shadow(0 0 4px rgba(0, 242, 148, 0.3));
-  }
-  100% {
-    filter: drop-shadow(0 0 12px rgba(0, 242, 148, 0.6));
-  }
-}
-
+/* Toast Notifications */
 .toast-container {
   position: fixed;
   bottom: 2rem;
@@ -661,6 +675,16 @@ body {
   gap: 0.75rem;
 }
 
+/* Animations */
+@keyframes pulse {
+  0% {
+    filter: drop-shadow(0 0 4px rgba(0, 242, 148, 0.3));
+  }
+  100% {
+    filter: drop-shadow(0 0 12px rgba(0, 242, 148, 0.6));
+  }
+}
+
 @keyframes slideIn {
   from {
     transform: translateX(100%);
@@ -669,5 +693,193 @@ body {
   to {
     transform: translateX(0);
     opacity: 1;
+  }
+}
+
+/* ========================================================== */
+/*                   MEDIA QUERIES (RESPONSIVE)               */
+/* ========================================================== */
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 1rem 1rem;
+  }
+  
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .nav-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* Mobile Portrait Mode & Small Screens */
+@media (max-width: 640px) {
+  /* 1. Sleek Horizontal List Podium on Mobile */
+  .podium-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+  }
+  
+  .podium-card {
+    min-height: auto !important;
+    padding: 1rem;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    text-align: left;
+  }
+  
+  .podium-card.first {
+    order: 1;
+    border-width: 1.5px;
+  }
+  .podium-card.second {
+    order: 2;
+  }
+  .podium-card.third {
+    order: 3;
+  }
+  
+  .podium-rank {
+    position: static;
+    margin-right: 0.75rem;
+    flex-shrink: 0;
+  }
+  
+  .podium-name {
+    margin: 0;
+    font-size: 1.05rem;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  
+  .podium-points {
+    margin: 0 0.75rem;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+  }
+  
+  .podium-stats {
+    display: none; /* Hide detailed stats on mobile podium to keep it clean */
+  }
+  
+  .podium-card button {
+    margin-top: 0 !important;
+    padding: 0.4rem 0.75rem !important;
+    font-size: 0.75rem !important;
+    flex-shrink: 0;
+  }
+  
+  .podium-card svg:first-of-type {
+    display: none; /* Hide the big trophy icon inside card */
+  }
+
+  /* 2. Responsive Leaderboard Table */
+  /* Hide the 3 intermediate columns: Marcador Exacto, Acierto Ganador, Errados on mobile */
+  .custom-table th:nth-child(3),
+  .custom-table td:nth-child(3),
+  .custom-table th:nth-child(4),
+  .custom-table td:nth-child(4),
+  .custom-table th:nth-child(5),
+  .custom-table td:nth-child(5) {
+    display: none;
+  }
+  
+  .custom-table th, .custom-table td {
+    padding: 0.85rem 1rem;
+  }
+  
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem 0.75rem;
+  }
+  
+  .search-input {
+    width: 100%;
+  }
+
+  /* 3. Responsive Modals (Full-screen bottom sheet look on mobile) */
+  .modal-overlay {
+    padding: 0.5rem;
+    align-items: flex-end; /* Slides from bottom */
+  }
+  
+  .modal-content {
+    padding: 1.25rem;
+    max-height: 93vh;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+  }
+  
+  .modal-close {
+    top: 1rem;
+    right: 1rem;
+  }
+  
+  .groups-container {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .group-card {
+    padding: 1rem;
+  }
+
+  /* 4. Responsive Toast Alert Positions */
+  .toast-container {
+    bottom: 1rem;
+    left: 1rem;
+    right: 1rem;
+  }
+  
+  .toast {
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* Extra Small Screens (max-width: 480px) */
+@media (max-width: 480px) {
+  /* Admin Panel Responsiveness */
+  .admin-match-card {
+    grid-template-columns: 1fr;
+    padding: 0.85rem;
+    gap: 0.75rem;
+  }
+  
+  .admin-score-inputs {
+    justify-content: flex-start;
+    width: 100%;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 0.75rem;
+  }
+  
+  .score-input {
+    flex: 1;
+    max-width: 65px;
+    height: 35px;
+    font-size: 1rem;
+  }
+  
+  .admin-match-teams {
+    font-size: 0.9rem;
   }
 }
