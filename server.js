@@ -51,6 +51,18 @@ const dbGet = (sql, params = []) =>
     });
   });
 
+// Authentication middleware
+function requireAdmin(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+  
+  if (authHeader && authHeader === adminPassword) {
+    next();
+  } else {
+    res.status(401).json({ error: "No autorizado. Contraseña incorrecta." });
+  }
+}
+
 // Retrieve dynamic points settings
 async function getSettings() {
   try {
@@ -65,7 +77,6 @@ async function getSettings() {
       fail: settings.points_fail !== undefined ? settings.points_fail : 0,
     };
   } catch (e) {
-    // Default fallback
     return { exact: 3, outcome: 1, fail: 0 };
   }
 }
@@ -76,19 +87,17 @@ function calculatePoints(homePred, awayPred, homeActual, awayActual, weights) {
     return 0;
   }
   
-  // Exact score = weights.exact (default 3)
   if (homePred === homeActual && awayPred === awayActual) {
     return weights.exact;
   }
   
-  // Winner/Draw match = weights.outcome (default 1)
   const predDiff = homePred - awayPred;
   const actualDiff = homeActual - awayActual;
   
   if (
-    (predDiff > 0 && actualDiff > 0) || // Home win predicted and happened
-    (predDiff < 0 && actualDiff < 0) || // Away win predicted and happened
-    (predDiff === 0 && actualDiff === 0) // Draw predicted and happened
+    (predDiff > 0 && actualDiff > 0) ||
+    (predDiff < 0 && actualDiff < 0) ||
+    (predDiff === 0 && actualDiff === 0)
   ) {
     return weights.outcome;
   }
@@ -96,7 +105,6 @@ function calculatePoints(homePred, awayPred, homeActual, awayActual, weights) {
   return weights.fail;
 }
 
-// English to Spanish Team Name Map for Football API Sync
 const teamTranslations = {
   "Mexico": "México",
   "South Africa": "Sudáfrica",
@@ -164,7 +172,6 @@ app.get("/api/leaderboard", async (req, res) => {
     const predictions = await dbAll("SELECT * FROM predictions");
     const weights = await getSettings();
 
-    // Map predictions by participant
     const predictionsByParticipant = {};
     predictions.forEach((pred) => {
       if (!predictionsByParticipant[pred.participant_id]) {
@@ -210,7 +217,6 @@ app.get("/api/leaderboard", async (req, res) => {
       };
     });
 
-    // Sort: 1st by Points desc, 2nd by name asc
     leaderboard.sort((a, b) => {
       if (b.totalPoints !== a.totalPoints) {
         return b.totalPoints - a.totalPoints;
@@ -225,7 +231,18 @@ app.get("/api/leaderboard", async (req, res) => {
   }
 });
 
-// 2. Get all participants
+// 2. Validate Admin Password
+app.post("/api/admin/verify", (req, res) => {
+  const { password } = req.body;
+  const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+  if (password === adminPassword) {
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ success: false, error: "Contraseña incorrecta." });
+  }
+});
+
+// 3. Get all participants
 app.get("/api/participants", async (req, res) => {
   try {
     const participants = await dbAll("SELECT * FROM participants ORDER BY name ASC");
@@ -235,7 +252,7 @@ app.get("/api/participants", async (req, res) => {
   }
 });
 
-// 3. Get single participant predictions and points
+// 4. Get single participant predictions and points
 app.get("/api/participants/:id", async (req, res) => {
   try {
     const participant = await dbGet("SELECT * FROM participants WHERE id = ?", [req.params.id]);
@@ -287,8 +304,8 @@ app.get("/api/participants/:id", async (req, res) => {
   }
 });
 
-// 4. Update participant name
-app.put("/api/participants/:id", async (req, res) => {
+// 5. Update participant name (ADMIN ONLY)
+app.put("/api/participants/:id", requireAdmin, async (req, res) => {
   const { name } = req.body;
   if (!name || name.trim() === "") {
     return res.status(400).json({ error: "Name is required." });
@@ -310,8 +327,8 @@ app.put("/api/participants/:id", async (req, res) => {
   }
 });
 
-// 5. Update participant's predictions (bulk)
-app.put("/api/participants/:id/predictions", async (req, res) => {
+// 6. Update participant's predictions (ADMIN ONLY)
+app.put("/api/participants/:id/predictions", requireAdmin, async (req, res) => {
   const { predictions } = req.body;
   if (!Array.isArray(predictions)) {
     return res.status(400).json({ error: "Predictions array is required." });
@@ -335,7 +352,7 @@ app.put("/api/participants/:id/predictions", async (req, res) => {
   }
 });
 
-// 6. Get all matches
+// 7. Get all matches
 app.get("/api/matches", async (req, res) => {
   try {
     const matches = await dbAll("SELECT * FROM matches ORDER BY id ASC");
@@ -345,8 +362,8 @@ app.get("/api/matches", async (req, res) => {
   }
 });
 
-// 7. Update match result (actual score)
-app.put("/api/matches/:id", async (req, res) => {
+// 8. Update match result (actual score) (ADMIN ONLY)
+app.put("/api/matches/:id", requireAdmin, async (req, res) => {
   const { home_actual, away_actual } = req.body;
   
   const home = home_actual === "" || home_actual === null ? null : parseInt(home_actual);
@@ -364,7 +381,7 @@ app.put("/api/matches/:id", async (req, res) => {
   }
 });
 
-// 8. Get Points Settings
+// 9. Get Points Settings
 app.get("/api/settings", async (req, res) => {
   try {
     const weights = await getSettings();
@@ -374,8 +391,8 @@ app.get("/api/settings", async (req, res) => {
   }
 });
 
-// 9. Update Points Settings
-app.put("/api/settings", async (req, res) => {
+// 10. Update Points Settings (ADMIN ONLY)
+app.put("/api/settings", requireAdmin, async (req, res) => {
   const { exact, outcome, fail } = req.body;
 
   if (exact === undefined || outcome === undefined || fail === undefined) {
@@ -392,8 +409,8 @@ app.put("/api/settings", async (req, res) => {
   }
 });
 
-// 10. Sync match results with Live API
-app.post("/api/matches/sync", async (req, res) => {
+// 11. Sync match results with Live API (ADMIN ONLY)
+app.post("/api/matches/sync", requireAdmin, async (req, res) => {
   const apiKey = process.env.FOOTBALL_API_KEY;
   if (!apiKey) {
     return res.status(400).json({

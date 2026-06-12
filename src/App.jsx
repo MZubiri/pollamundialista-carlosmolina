@@ -13,7 +13,9 @@ import {
   Eye,
   FileText,
   User,
-  Sliders
+  Sliders,
+  Lock,
+  Unlock
 } from "lucide-react";
 
 export default function App() {
@@ -24,6 +26,12 @@ export default function App() {
   const [selectedParticipantId, setSelectedParticipantId] = useState(null);
   const [participantDetail, setParticipantDetail] = useState(null);
   const [matches, setMatches] = useState([]);
+  
+  // Auth state
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginPasswordInput, setLoginPasswordInput] = useState("");
   
   // Admin states
   const [adminTab, setAdminTab] = useState("matches"); // matches, participants, settings
@@ -47,6 +55,14 @@ export default function App() {
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
+  };
+
+  // Helper for admin fetches
+  const adminHeaders = () => {
+    return {
+      "Content-Type": "application/json",
+      "Authorization": adminPassword
+    };
   };
 
   // Fetch Leaderboard
@@ -98,9 +114,45 @@ export default function App() {
     }
   };
 
+  // Check 401 Unauthorized errors
+  const checkAuthError = (res) => {
+    if (res.status === 401) {
+      addToast("Sesión de administrador no válida o contraseña incorrecta.", "error");
+      setIsAdmin(false);
+      setAdminPassword("");
+      localStorage.removeItem("adminPassword");
+      setView("leaderboard");
+      return true;
+    }
+    return false;
+  };
+
+  // Verify stored password on load
+  const verifyStoredPassword = async (savedPassword) => {
+    try {
+      const res = await fetch("/api/admin/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: savedPassword })
+      });
+      if (res.ok) {
+        setIsAdmin(true);
+        setAdminPassword(savedPassword);
+      } else {
+        localStorage.removeItem("adminPassword");
+      }
+    } catch (e) {
+      localStorage.removeItem("adminPassword");
+    }
+  };
+
   useEffect(() => {
     fetchLeaderboard();
     fetchSettings();
+    const savedPassword = localStorage.getItem("adminPassword");
+    if (savedPassword) {
+      verifyStoredPassword(savedPassword);
+    }
   }, []);
 
   // Fetch Participant Detail when ID changes
@@ -122,11 +174,59 @@ export default function App() {
     }
   }, [selectedParticipantId]);
 
-  // Handle API sync
+  // Login click
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    if (!loginPasswordInput) return;
+    
+    try {
+      const res = await fetch("/api/admin/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: loginPasswordInput })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Contraseña incorrecta");
+      
+      setIsAdmin(true);
+      setAdminPassword(loginPasswordInput);
+      localStorage.setItem("adminPassword", loginPasswordInput);
+      setShowLoginModal(false);
+      setLoginPasswordInput("");
+      addToast("Acceso de administrador concedido.");
+      
+      // Navigate to admin
+      setView("admin");
+      fetchMatches();
+      fetchSettings();
+    } catch (err) {
+      addToast(err.message, "error");
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    setAdminPassword("");
+    localStorage.removeItem("adminPassword");
+    setView("leaderboard");
+    addToast("Sesión de administrador cerrada.");
+  };
+
+  // Handle API sync (Admin Only)
   const handleApiSync = async () => {
+    if (!isAdmin) {
+      setShowLoginModal(true);
+      return;
+    }
     setSyncing(true);
     try {
-      const res = await fetch("/api/matches/sync", { method: "POST" });
+      const res = await fetch("/api/matches/sync", { 
+        method: "POST",
+        headers: adminHeaders()
+      });
+      if (checkAuthError(res)) return;
+      
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Sync failed");
       addToast(data.message || "Sync completed successfully!");
@@ -141,18 +241,20 @@ export default function App() {
     }
   };
 
-  // Update Match Actual Score
+  // Update Match Actual Score (Admin Only)
   const handleUpdateMatchScore = async (matchId) => {
     const scores = matchScoreChanges[matchId];
     try {
       const res = await fetch(`/api/matches/${matchId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({
           home_actual: scores.home_actual === "" ? null : scores.home_actual,
           away_actual: scores.away_actual === "" ? null : scores.away_actual
         })
       });
+      if (checkAuthError(res)) return;
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update match score");
       addToast("Partido actualizado con éxito.");
@@ -189,7 +291,7 @@ export default function App() {
     }
   };
 
-  // Save Participant Predictions
+  // Save Participant Predictions (Admin Only)
   const handleSaveParticipantPreds = async () => {
     if (!editingParticipant) return;
     
@@ -202,9 +304,11 @@ export default function App() {
     try {
       const res = await fetch(`/api/participants/${editingParticipant.id}/predictions`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({ predictions: updatedPredictions })
       });
+      if (checkAuthError(res)) return;
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save predictions");
       
@@ -216,15 +320,17 @@ export default function App() {
     }
   };
 
-  // Edit Participant Name
+  // Edit Participant Name (Admin Only)
   const handleSaveParticipantName = async (id) => {
     if (!newNameVal || newNameVal.trim() === "") return;
     try {
       const res = await fetch(`/api/participants/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({ name: newNameVal.trim() })
       });
+      if (checkAuthError(res)) return;
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to rename participant");
       
@@ -236,20 +342,22 @@ export default function App() {
     }
   };
 
-  // Save Points Settings
+  // Save Points Settings (Admin Only)
   const handleSaveSettings = async () => {
     try {
       const res = await fetch("/api/settings", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify(editingSettings)
       });
+      if (checkAuthError(res)) return;
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save settings");
       
       addToast("Reglas de puntuación actualizadas.");
       setPointsSettings(editingSettings);
-      fetchLeaderboard(); // Recalculates points instantly!
+      fetchLeaderboard();
     } catch (err) {
       addToast(err.message, "error");
     }
@@ -286,37 +394,61 @@ export default function App() {
         <div className="nav-actions">
           {view === "leaderboard" ? (
             <>
+              {isAdmin ? (
+                <>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setView("admin");
+                      fetchMatches();
+                      fetchSettings();
+                    }}
+                  >
+                    <Settings size={18} />
+                    Panel Admin
+                  </button>
+                  <button className="btn btn-danger" onClick={handleAdminLogout}>
+                    <Lock size={18} />
+                    Cerrar Admin
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowLoginModal(true)}
+                >
+                  <Unlock size={18} />
+                  Ingresar Admin
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  className="btn btn-primary"
+                  onClick={handleApiSync}
+                  disabled={syncing}
+                >
+                  <RefreshCw size={18} className={syncing ? "animate-spin" : ""} />
+                  {syncing ? "Sincronizando..." : "Sincronizar Resultados"}
+                </button>
+              )}
+            </>
+          ) : (
+            <>
               <button
                 className="btn btn-secondary"
                 onClick={() => {
-                  setView("admin");
-                  fetchMatches();
-                  fetchSettings();
+                  setView("leaderboard");
+                  fetchLeaderboard();
                 }}
               >
-                <Settings size={18} />
-                Panel Admin
+                <Users size={18} />
+                Ver Tabla General
               </button>
-              <button
-                className="btn btn-primary"
-                onClick={handleApiSync}
-                disabled={syncing}
-              >
-                <RefreshCw size={18} className={syncing ? "animate-spin" : ""} />
-                {syncing ? "Sincronizando..." : "Sincronizar Resultados"}
+              <button className="btn btn-danger" onClick={handleAdminLogout}>
+                <Lock size={18} />
+                Cerrar Admin
               </button>
             </>
-          ) : (
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                setView("leaderboard");
-                fetchLeaderboard();
-              }}
-            >
-              <Users size={18} />
-              Ver Tabla General
-            </button>
           )}
         </div>
       </header>
@@ -468,7 +600,7 @@ export default function App() {
       )}
 
       {/* Admin View */}
-      {view === "admin" && (
+      {view === "admin" && isAdmin && (
         <div className="dashboard-grid">
           <div className="table-card" style={{ padding: "2rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
@@ -678,6 +810,45 @@ export default function App() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Admin Password Login Modal */}
+      {showLoginModal && (
+        <div className="modal-overlay" onClick={() => setShowLoginModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "450px" }}>
+            <button className="modal-close" onClick={() => setShowLoginModal(false)}>
+              <X size={24} />
+            </button>
+            
+            <form onSubmit={handleLoginSubmit} style={{ margin: "1rem 0 0" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem", marginBottom: "2rem", textAlign: "center" }}>
+                <div style={{ width: "50px", height: "50px", borderRadius: "50%", backgroundColor: "rgba(0, 242, 148, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "hsl(var(--primary))" }}>
+                  <Lock size={24} />
+                </div>
+                <h3 style={{ fontSize: "1.3rem", fontWeight: "700" }}>Modo Administrador</h3>
+                <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.85rem" }}>
+                  Ingresa la contraseña de administrador para realizar modificaciones.
+                </p>
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">Contraseña</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  className="form-control"
+                  value={loginPasswordInput}
+                  onChange={(e) => setLoginPasswordInput(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              
+              <button type="submit" className="btn btn-primary" style={{ width: "100%", justifyContent: "center", marginTop: "1rem" }}>
+                Acceder
+              </button>
+            </form>
           </div>
         </div>
       )}
