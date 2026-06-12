@@ -554,7 +554,7 @@ export default function App() {
                   Cargando posiciones...
                 </div>
               ) : (
-                <table className="custom-table">
+                <table className="custom-table leaderboard-table">
                   <thead>
                     <tr>
                       <th className="rank-col">Pos.</th>
@@ -696,7 +696,7 @@ export default function App() {
 
             {/* Participants Admin Tab */}
             {adminTab === "participants" && (
-              <table className="custom-table">
+              <table className="custom-table participants-table">
                 <thead>
                   <tr>
                     <th>ID</th>

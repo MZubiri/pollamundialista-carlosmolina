@@ -811,18 +811,18 @@ body {
 
   /* 2. Responsive Leaderboard Table */
   /* Hide the 3 intermediate columns: Marcador Exacto, Acierto Ganador, Errados on mobile */
-  .custom-table th:nth-child(3),
-  .custom-table td:nth-child(3),
-  .custom-table th:nth-child(4),
-  .custom-table td:nth-child(4),
-  .custom-table th:nth-child(5),
-  .custom-table td:nth-child(5) {
+  .leaderboard-table th:nth-child(3),
+  .leaderboard-table td:nth-child(3),
+  .leaderboard-table th:nth-child(4),
+  .leaderboard-table td:nth-child(4),
+  .leaderboard-table th:nth-child(5),
+  .leaderboard-table td:nth-child(5) {
     display: none;
   }
   
   /* Hide the ID column in participants table as well */
-  .custom-table th:nth-child(1),
-  .custom-table td:nth-child(1) {
+  .participants-table th:nth-child(1),
+  .participants-table td:nth-child(1) {
     display: none;
   }
 
