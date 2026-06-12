@@ -603,9 +603,9 @@ export default function App() {
       {view === "admin" && isAdmin && (
         <div className="dashboard-grid">
           <div className="table-card" style={{ padding: "2rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+            <div className="admin-header">
               <h2 className="table-title">Panel de Administración</h2>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div className="admin-tab-buttons">
                 <button
                   className={`btn ${adminTab === "matches" ? "btn-primary" : "btn-secondary"}`}
                   onClick={() => setAdminTab("matches")}
@@ -740,22 +740,20 @@ export default function App() {
                         <div style={{ display: "inline-flex", gap: "0.5rem" }}>
                           <button
                             className="btn btn-secondary"
-                            style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem" }}
                             onClick={() => {
                               setEditingNameId(p.id);
                               setNewNameVal(p.name);
                             }}
                           >
                             <Edit2 size={12} />
-                            Renombrar
+                            <span className="hidden-mobile">Renombrar</span>
                           </button>
                           <button
                             className="btn btn-primary"
-                            style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem" }}
                             onClick={() => handleEditParticipantPreds(p.id)}
                           >
                             <FileText size={12} />
-                            Editar Predicciones
+                            <span className="hidden-mobile">Editar Predicciones</span>
                           </button>
                         </div>
                       </td>

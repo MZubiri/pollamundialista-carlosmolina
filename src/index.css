@@ -584,6 +584,21 @@ body {
   box-shadow: 0 0 10px rgba(0, 242, 148, 0.1);
 }
 
+/* Admin Panel Styling */
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.admin-tab-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 /* CRUD Admin Match Editing Panel */
 .admin-grid {
   display: grid;
@@ -648,6 +663,11 @@ body {
 .score-input:focus {
   outline: none;
   border-color: hsl(var(--primary));
+}
+
+/* Utility to hide text on mobile action buttons */
+.hidden-mobile {
+  display: inline;
 }
 
 /* Toast Notifications */
@@ -800,6 +820,12 @@ body {
     display: none;
   }
   
+  /* Hide the ID column in participants table as well */
+  .custom-table th:nth-child(1),
+  .custom-table td:nth-child(1) {
+    display: none;
+  }
+
   .custom-table th, .custom-table td {
     padding: 0.85rem 1rem;
   }
@@ -813,6 +839,16 @@ body {
   
   .search-input {
     width: 100%;
+  }
+
+  /* Hide button text on mobile, making action buttons compact square icons */
+  .hidden-mobile {
+    display: none;
+  }
+  
+  .custom-table td .btn {
+    padding: 0.5rem;
+    border-radius: 6px;
   }
 
   /* 3. Responsive Modals (Full-screen bottom sheet look on mobile) */
@@ -853,6 +889,25 @@ body {
     width: 100%;
     font-size: 0.85rem;
     padding: 0.75rem 1rem;
+  }
+  
+  /* Admin Panel Styling */
+  .admin-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .admin-tab-buttons {
+    width: 100%;
+  }
+  
+  .admin-tab-buttons .btn {
+    flex: 1 1 auto;
+    text-align: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    padding: 0.6rem 0.8rem;
   }
 }
 
