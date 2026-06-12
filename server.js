@@ -1,4 +1,3 @@
-import express from "import express"; // wait, let's fix this import
 import express from "express";
 import cors from "cors";
 import path from "path";
