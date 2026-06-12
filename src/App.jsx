@@ -709,32 +709,7 @@ export default function App() {
                     <tr key={p.id} style={{ cursor: "default" }}>
                       <td style={{ width: "80px" }}>#{p.id}</td>
                       <td>
-                        {editingNameId === p.id ? (
-                          <div style={{ display: "flex", gap: "0.5rem" }}>
-                            <input
-                              type="text"
-                              className="search-input"
-                              value={newNameVal}
-                              onChange={(e) => setNewNameVal(e.target.value)}
-                            />
-                            <button
-                              className="btn btn-primary"
-                              style={{ padding: "0.4rem 0.8rem" }}
-                              onClick={() => handleSaveParticipantName(p.id)}
-                            >
-                              Guardar
-                            </button>
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: "0.4rem 0.8rem" }}
-                              onClick={() => setEditingNameId(null)}
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        ) : (
-                          <span style={{ fontWeight: "600" }}>{p.name}</span>
-                        )}
+                        <span style={{ fontWeight: "600" }}>{p.name}</span>
                       </td>
                       <td style={{ textAlign: "right" }}>
                         <div style={{ display: "inline-flex", gap: "0.5rem" }}>
@@ -998,6 +973,55 @@ export default function App() {
                 Guardar Cambios
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rename Participant Modal */}
+      {editingNameId !== null && (
+        <div className="modal-overlay" onClick={() => setEditingNameId(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "450px" }}>
+            <button className="modal-close" onClick={() => setEditingNameId(null)}>
+              <X size={24} />
+            </button>
+            
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveParticipantName(editingNameId);
+              }}
+              style={{ margin: "1rem 0 0" }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem", marginBottom: "2rem", textAlign: "center" }}>
+                <div style={{ width: "50px", height: "50px", borderRadius: "50%", backgroundColor: "rgba(0, 242, 148, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "hsl(var(--primary))" }}>
+                  <User size={24} />
+                </div>
+                <h3 style={{ fontSize: "1.3rem", fontWeight: "700" }}>Renombrar Participante</h3>
+                <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.85rem" }}>
+                  Ingresa el nuevo nombre para el participante.
+                </p>
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">Nuevo Nombre</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={newNameVal}
+                  onChange={(e) => setNewNameVal(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              
+              <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingNameId(null)} style={{ flex: 1, justifyContent: "center" }}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }}>
+                  Guardar
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
