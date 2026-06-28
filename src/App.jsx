@@ -15,17 +15,24 @@ import {
   User,
   Sliders,
   Lock,
-  Unlock
+  Unlock,
+  ShieldCheck,
+  CalendarClock
 } from "lucide-react";
 
 export default function App() {
-  const [view, setView] = useState("leaderboard"); // leaderboard, admin
+  const [view, setView] = useState("leaderboard"); // leaderboard, knockout, admin
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState(null);
   const [participantDetail, setParticipantDetail] = useState(null);
   const [matches, setMatches] = useState([]);
+  const [knockoutData, setKnockoutData] = useState(null);
+  const [selectedKnockoutParticipantId, setSelectedKnockoutParticipantId] = useState("");
+  const [knockoutPredChanges, setKnockoutPredChanges] = useState({});
+  const [knockoutAdminChanges, setKnockoutAdminChanges] = useState({});
+  const [savingKnockout, setSavingKnockout] = useState(false);
   
   // Auth state
   const [isAdmin, setIsAdmin] = useState(false);
@@ -34,7 +41,7 @@ export default function App() {
   const [loginPasswordInput, setLoginPasswordInput] = useState("");
   
   // Admin states
-  const [adminTab, setAdminTab] = useState("matches"); // matches, participants, settings
+  const [adminTab, setAdminTab] = useState("matches"); // matches, knockout, participants, settings
   const [syncing, setSyncing] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState(null); // { id, name, predictions }
   const [editPredChanges, setEditPredChanges] = useState({}); // { matchId: { homePred, awayPred } }
@@ -101,6 +108,57 @@ export default function App() {
     }
   };
 
+  const fetchKnockout = async () => {
+    try {
+      const res = await fetch("/api/knockout");
+      if (!res.ok) throw new Error("Error fetching knockout matches");
+      const data = await res.json();
+      setKnockoutData(data);
+
+      const adminChanges = {};
+      data.matches.forEach((m) => {
+        adminChanges[m.id] = {
+          home_team: m.home_team,
+          away_team: m.away_team,
+          home_actual: m.home_actual !== null ? m.home_actual : "",
+          away_actual: m.away_actual !== null ? m.away_actual : ""
+        };
+      });
+      setKnockoutAdminChanges(adminChanges);
+    } catch (err) {
+      addToast(err.message, "error");
+    }
+  };
+
+  const fetchKnockoutPredictions = async (participantId) => {
+    if (!participantId || !knockoutData) {
+      setKnockoutPredChanges({});
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/knockout/predictions/${participantId}`);
+      if (!res.ok) throw new Error("Error fetching knockout predictions");
+      const data = await res.json();
+      const existingByMatch = {};
+      data.predictions.forEach((p) => {
+        existingByMatch[p.knockout_match_id] = p;
+      });
+
+      const nextChanges = {};
+      knockoutData.matches.forEach((m) => {
+        const saved = existingByMatch[m.id];
+        nextChanges[m.id] = {
+          home_pred: saved?.home_pred !== null && saved?.home_pred !== undefined ? saved.home_pred : "",
+          away_pred: saved?.away_pred !== null && saved?.away_pred !== undefined ? saved.away_pred : ""
+        };
+      });
+      setKnockoutPredChanges(nextChanges);
+    } catch (err) {
+      addToast(err.message, "error");
+    }
+  };
+
   // Fetch Points Settings
   const fetchSettings = async () => {
     try {
@@ -149,11 +207,18 @@ export default function App() {
   useEffect(() => {
     fetchLeaderboard();
     fetchSettings();
+    fetchKnockout();
     const savedPassword = localStorage.getItem("adminPassword");
     if (savedPassword) {
       verifyStoredPassword(savedPassword);
     }
   }, []);
+
+  useEffect(() => {
+    if (selectedKnockoutParticipantId) {
+      fetchKnockoutPredictions(selectedKnockoutParticipantId);
+    }
+  }, [selectedKnockoutParticipantId, knockoutData?.matches?.length]);
 
   // Fetch Participant Detail when ID changes
   useEffect(() => {
@@ -363,6 +428,68 @@ export default function App() {
     }
   };
 
+  const handleSaveKnockoutPredictions = async () => {
+    if (!selectedKnockoutParticipantId || !knockoutData) {
+      addToast("Selecciona tu participante antes de guardar.", "error");
+      return;
+    }
+
+    const predictions = knockoutData.matches.map((m) => ({
+      match_id: m.id,
+      home_pred: knockoutPredChanges[m.id]?.home_pred,
+      away_pred: knockoutPredChanges[m.id]?.away_pred
+    }));
+
+    const hasInvalid = predictions.some(
+      (p) => p.home_pred === "" || p.away_pred === "" || Number(p.home_pred) < 0 || Number(p.away_pred) < 0
+    );
+
+    if (hasInvalid) {
+      addToast("Completa todos los marcadores con números válidos.", "error");
+      return;
+    }
+
+    setSavingKnockout(true);
+    try {
+      const res = await fetch("/api/knockout/predictions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participant_id: Number(selectedKnockoutParticipantId),
+          predictions
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudieron guardar los pronósticos");
+      addToast(data.message || "Pronósticos guardados.");
+      fetchKnockout();
+    } catch (err) {
+      addToast(err.message, "error");
+    } finally {
+      setSavingKnockout(false);
+    }
+  };
+
+  const handleUpdateKnockoutMatch = async (matchId) => {
+    const changes = knockoutAdminChanges[matchId];
+    try {
+      const res = await fetch(`/api/knockout/matches/${matchId}`, {
+        method: "PUT",
+        headers: adminHeaders(),
+        body: JSON.stringify(changes)
+      });
+      if (checkAuthError(res)) return;
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo actualizar el partido");
+      addToast("Partido de eliminatorias actualizado.");
+      fetchKnockout();
+      fetchLeaderboard();
+    } catch (err) {
+      addToast(err.message, "error");
+    }
+  };
+
   // Group detailed predictions by Group letter
   const getGroups = (predictionsList) => {
     const groups = {};
@@ -382,6 +509,23 @@ export default function App() {
 
   const podium = leaderboard.slice(0, 3);
   const restOfList = filteredLeaderboard;
+  const knockoutSelectedParticipant = leaderboard.find(
+    (p) => p.id === Number(selectedKnockoutParticipantId)
+  );
+  const knockoutDeadlineText = knockoutData?.deadline
+    ? new Intl.DateTimeFormat("es-PE", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: "America/Lima"
+      }).format(new Date(knockoutData.deadline))
+    : "";
+  const knockoutPredictionCounts = {};
+  knockoutData?.predictionCounts?.forEach((row) => {
+    knockoutPredictionCounts[row.participant_id] = row.count;
+  });
+  const knockoutSubmittedParticipants = Object.values(knockoutPredictionCounts).filter(
+    (count) => count === knockoutData?.matches?.length
+  ).length;
 
   return (
     <div className="app-container">
@@ -394,6 +538,16 @@ export default function App() {
         <div className="nav-actions">
           {view === "leaderboard" ? (
             <>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setView("knockout");
+                  fetchKnockout();
+                }}
+              >
+                <ShieldCheck size={18} />
+                Pronosticar Eliminatorias
+              </button>
               {isAdmin ? (
                 <>
                   <button
@@ -402,6 +556,7 @@ export default function App() {
                       setView("admin");
                       fetchMatches();
                       fetchSettings();
+                      fetchKnockout();
                     }}
                   >
                     <Settings size={18} />
@@ -429,6 +584,41 @@ export default function App() {
                 >
                   <RefreshCw size={18} className={syncing ? "animate-spin" : ""} />
                   {syncing ? "Sincronizando..." : "Sincronizar Resultados"}
+                </button>
+              )}
+            </>
+          ) : view === "knockout" ? (
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setView("leaderboard");
+                  fetchLeaderboard();
+                }}
+              >
+                <Users size={18} />
+                Ver Tabla General
+              </button>
+              {isAdmin ? (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setView("admin");
+                    fetchMatches();
+                    fetchSettings();
+                    fetchKnockout();
+                  }}
+                >
+                  <Settings size={18} />
+                  Panel Admin
+                </button>
+              ) : (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowLoginModal(true)}
+                >
+                  <Unlock size={18} />
+                  Ingresar Admin
                 </button>
               )}
             </>
@@ -599,6 +789,123 @@ export default function App() {
         </>
       )}
 
+      {/* Knockout Prediction View */}
+      {view === "knockout" && (
+        <div className="dashboard-grid">
+          <section className="knockout-panel">
+            <div className="knockout-header">
+              <div>
+                <h2 className="table-title">Pronósticos Eliminatorias</h2>
+                <div className="deadline-row">
+                  <CalendarClock size={16} />
+                  <span>
+                    Cierre: {knockoutDeadlineText || "28 jun 2026, 2:00 p. m."}
+                  </span>
+                </div>
+              </div>
+              <span className={`lock-badge ${knockoutData?.locked ? "locked" : "open"}`}>
+                {knockoutData?.locked ? "Cerrado" : "Abierto"}
+              </span>
+            </div>
+
+            {knockoutData?.locked ? (
+              <div className="knockout-alert error">
+                El formulario ya está cerrado. Desde este momento solo el administrador puede cargar resultados.
+              </div>
+            ) : (
+              <div className="knockout-alert">
+                Selecciona tu nombre, revisa tus puntos actuales y guarda todos los marcadores antes del primer partido.
+              </div>
+            )}
+
+            <div className="knockout-selector">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Participante</label>
+                <select
+                  className="form-control"
+                  value={selectedKnockoutParticipantId}
+                  onChange={(e) => setSelectedKnockoutParticipantId(e.target.value)}
+                  disabled={knockoutData?.locked}
+                >
+                  <option value="">Selecciona tu nombre</option>
+                  {leaderboard.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} - {p.totalPoints} pts
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="current-points-box">
+                <span>Puntos actuales</span>
+                <strong>{knockoutSelectedParticipant?.totalPoints ?? "--"} pts</strong>
+              </div>
+            </div>
+
+            <div className="knockout-match-grid">
+              {knockoutData?.matches?.map((m) => (
+                <div key={m.id} className="knockout-match-card">
+                  <div className="match-meta">
+                    <span>{m.stage}</span>
+                    <span>Partido {m.id}</span>
+                  </div>
+                  <div className="knockout-teams">
+                    <span>{m.home_team}</span>
+                    <span>vs</span>
+                    <span>{m.away_team}</span>
+                  </div>
+                  <div className="knockout-score-row">
+                    <input
+                      type="number"
+                      min="0"
+                      className="score-input"
+                      value={knockoutPredChanges[m.id]?.home_pred ?? ""}
+                      disabled={!selectedKnockoutParticipantId || knockoutData?.locked}
+                      onChange={(e) =>
+                        setKnockoutPredChanges({
+                          ...knockoutPredChanges,
+                          [m.id]: {
+                            ...knockoutPredChanges[m.id],
+                            home_pred: e.target.value
+                          }
+                        })
+                      }
+                    />
+                    <span>-</span>
+                    <input
+                      type="number"
+                      min="0"
+                      className="score-input"
+                      value={knockoutPredChanges[m.id]?.away_pred ?? ""}
+                      disabled={!selectedKnockoutParticipantId || knockoutData?.locked}
+                      onChange={(e) =>
+                        setKnockoutPredChanges({
+                          ...knockoutPredChanges,
+                          [m.id]: {
+                            ...knockoutPredChanges[m.id],
+                            away_pred: e.target.value
+                          }
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="knockout-actions">
+              <button
+                className="btn btn-primary"
+                onClick={handleSaveKnockoutPredictions}
+                disabled={savingKnockout || knockoutData?.locked || !selectedKnockoutParticipantId}
+              >
+                <Save size={18} />
+                {savingKnockout ? "Guardando..." : "Guardar Pronósticos"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* Admin View */}
       {view === "admin" && isAdmin && (
         <div className="dashboard-grid">
@@ -611,6 +918,15 @@ export default function App() {
                   onClick={() => setAdminTab("matches")}
                 >
                   Resultados Reales
+                </button>
+                <button
+                  className={`btn ${adminTab === "knockout" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => {
+                    setAdminTab("knockout");
+                    fetchKnockout();
+                  }}
+                >
+                  Eliminatorias
                 </button>
                 <button
                   className={`btn ${adminTab === "participants" ? "btn-primary" : "btn-secondary"}`}
@@ -685,6 +1001,102 @@ export default function App() {
                         className="btn btn-primary"
                         style={{ padding: "0.5rem", borderRadius: "6px" }}
                         onClick={() => handleUpdateMatchScore(m.id)}
+                      >
+                        <Save size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Knockout Admin Tab */}
+            {adminTab === "knockout" && (
+              <div className="admin-match-list">
+                <div className="admin-info-row">
+                  <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.9rem" }}>
+                    Ajusta cruces pendientes y carga los marcadores finales de eliminatorias. Los puntos se suman al marcador general al guardar resultados.
+                  </p>
+                  <span className={`lock-badge ${knockoutData?.locked ? "locked" : "open"}`}>
+                    {knockoutSubmittedParticipants}/{knockoutData?.participants?.length || 0} enviados
+                  </span>
+                </div>
+
+                {knockoutData?.matches?.map((m) => (
+                  <div key={m.id} className="admin-knockout-card">
+                    <div>
+                      <span className="match-chip">{m.stage} - Partido {m.id}</span>
+                      <div className="admin-team-editors">
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={knockoutAdminChanges[m.id]?.home_team ?? ""}
+                          onChange={(e) =>
+                            setKnockoutAdminChanges({
+                              ...knockoutAdminChanges,
+                              [m.id]: {
+                                ...knockoutAdminChanges[m.id],
+                                home_team: e.target.value
+                              }
+                            })
+                          }
+                        />
+                        <span>vs</span>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={knockoutAdminChanges[m.id]?.away_team ?? ""}
+                          onChange={(e) =>
+                            setKnockoutAdminChanges({
+                              ...knockoutAdminChanges,
+                              [m.id]: {
+                                ...knockoutAdminChanges[m.id],
+                                away_team: e.target.value
+                              }
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="admin-score-inputs">
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="L"
+                        className="score-input"
+                        value={knockoutAdminChanges[m.id]?.home_actual ?? ""}
+                        onChange={(e) =>
+                          setKnockoutAdminChanges({
+                            ...knockoutAdminChanges,
+                            [m.id]: {
+                              ...knockoutAdminChanges[m.id],
+                              home_actual: e.target.value
+                            }
+                          })
+                        }
+                      />
+                      <span style={{ color: "hsl(var(--text-muted))" }}>-</span>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="V"
+                        className="score-input"
+                        value={knockoutAdminChanges[m.id]?.away_actual ?? ""}
+                        onChange={(e) =>
+                          setKnockoutAdminChanges({
+                            ...knockoutAdminChanges,
+                            [m.id]: {
+                              ...knockoutAdminChanges[m.id],
+                              away_actual: e.target.value
+                            }
+                          })
+                        }
+                      />
+                      <button
+                        className="btn btn-primary"
+                        style={{ padding: "0.5rem", borderRadius: "6px" }}
+                        onClick={() => handleUpdateKnockoutMatch(m.id)}
                       >
                         <Save size={16} />
                       </button>

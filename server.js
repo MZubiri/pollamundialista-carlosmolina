@@ -12,6 +12,8 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const KNOCKOUT_DEADLINE =
+  process.env.KNOCKOUT_PREDICTIONS_DEADLINE || "2026-06-28T14:00:00-05:00";
 
 app.use(cors());
 app.use(express.json());
@@ -50,6 +52,81 @@ const dbGet = (sql, params = []) =>
       else resolve(row);
     });
   });
+
+const defaultKnockoutMatches = [
+  { id: 73, stage: "Dieciseisavos", match_order: 1, home_team: "Alemania", away_team: "Paraguay" },
+  { id: 74, stage: "Dieciseisavos", match_order: 2, home_team: "Francia", away_team: "Suecia" },
+  { id: 75, stage: "Dieciseisavos", match_order: 3, home_team: "Sudáfrica", away_team: "Canadá" },
+  { id: 76, stage: "Dieciseisavos", match_order: 4, home_team: "Países Bajos", away_team: "Marruecos" },
+  { id: 77, stage: "Dieciseisavos", match_order: 5, home_team: "Portugal", away_team: "Croacia" },
+  { id: 78, stage: "Dieciseisavos", match_order: 6, home_team: "España", away_team: "Rival por confirmar" },
+  { id: 79, stage: "Dieciseisavos", match_order: 7, home_team: "Suiza", away_team: "Rival por confirmar" },
+  { id: 80, stage: "Dieciseisavos", match_order: 8, home_team: "México", away_team: "Catar" },
+  { id: 81, stage: "Dieciseisavos", match_order: 9, home_team: "Brasil", away_team: "Costa de Marfil" },
+  { id: 82, stage: "Dieciseisavos", match_order: 10, home_team: "Inglaterra", away_team: "Ghana" },
+  { id: 83, stage: "Dieciseisavos", match_order: 11, home_team: "Argentina", away_team: "Cabo Verde" },
+  { id: 84, stage: "Dieciseisavos", match_order: 12, home_team: "Uruguay", away_team: "Haití" },
+  { id: 85, stage: "Dieciseisavos", match_order: 13, home_team: "Estados Unidos", away_team: "Turquía" },
+  { id: 86, stage: "Dieciseisavos", match_order: 14, home_team: "Colombia", away_team: "Uzbekistán" },
+  { id: 87, stage: "Dieciseisavos", match_order: 15, home_team: "Ecuador", away_team: "Arabia Saudita" },
+  { id: 88, stage: "Dieciseisavos", match_order: 16, home_team: "Noruega", away_team: "Japón" },
+];
+
+function isKnockoutLocked() {
+  return Date.now() >= new Date(KNOCKOUT_DEADLINE).getTime();
+}
+
+function parseScore(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 99) return NaN;
+  return parsed;
+}
+
+async function ensureKnockoutTables() {
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS knockout_matches (
+      id INTEGER PRIMARY KEY,
+      stage TEXT NOT NULL,
+      match_order INTEGER NOT NULL,
+      home_team TEXT NOT NULL,
+      away_team TEXT NOT NULL,
+      home_actual INTEGER,
+      away_actual INTEGER
+    )
+  `);
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS knockout_predictions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      participant_id INTEGER NOT NULL,
+      knockout_match_id INTEGER NOT NULL,
+      home_pred INTEGER,
+      away_pred INTEGER,
+      submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(participant_id, knockout_match_id),
+      FOREIGN KEY(participant_id) REFERENCES participants(id),
+      FOREIGN KEY(knockout_match_id) REFERENCES knockout_matches(id)
+    )
+  `);
+
+  const existing = await dbGet("SELECT COUNT(*) AS count FROM knockout_matches");
+  if (existing.count === 0) {
+    for (const match of defaultKnockoutMatches) {
+      await dbRun(
+        `INSERT INTO knockout_matches
+          (id, stage, match_order, home_team, away_team, home_actual, away_actual)
+         VALUES (?, ?, ?, ?, ?, NULL, NULL)`,
+        [match.id, match.stage, match.match_order, match.home_team, match.away_team]
+      );
+    }
+  }
+}
+
+const dbReady = ensureKnockoutTables().catch((error) => {
+  console.error("Knockout table initialization error:", error);
+  throw error;
+});
 
 // Authentication middleware
 function requireAdmin(req, res, next) {
@@ -170,6 +247,8 @@ app.get("/api/leaderboard", async (req, res) => {
     const participants = await dbAll("SELECT * FROM participants");
     const matches = await dbAll("SELECT * FROM matches");
     const predictions = await dbAll("SELECT * FROM predictions");
+    const knockoutMatches = await dbAll("SELECT * FROM knockout_matches");
+    const knockoutPredictions = await dbAll("SELECT * FROM knockout_predictions");
     const weights = await getSettings();
 
     const predictionsByParticipant = {};
@@ -180,8 +259,17 @@ app.get("/api/leaderboard", async (req, res) => {
       predictionsByParticipant[pred.participant_id].push(pred);
     });
 
+    const knockoutPredictionsByParticipant = {};
+    knockoutPredictions.forEach((pred) => {
+      if (!knockoutPredictionsByParticipant[pred.participant_id]) {
+        knockoutPredictionsByParticipant[pred.participant_id] = [];
+      }
+      knockoutPredictionsByParticipant[pred.participant_id].push(pred);
+    });
+
     const leaderboard = participants.map((p) => {
       const pPreds = predictionsByParticipant[p.id] || [];
+      const pKnockoutPreds = knockoutPredictionsByParticipant[p.id] || [];
       let totalPoints = 0;
       let exactMatches = 0;
       let winnerMatches = 0;
@@ -189,6 +277,23 @@ app.get("/api/leaderboard", async (req, res) => {
 
       pPreds.forEach((pred) => {
         const match = matches.find((m) => m.id === pred.match_id);
+        if (match && match.home_actual !== null && match.away_actual !== null) {
+          const pts = calculatePoints(
+            pred.home_pred,
+            pred.away_pred,
+            match.home_actual,
+            match.away_actual,
+            weights
+          );
+          totalPoints += pts;
+          if (pts === weights.exact) exactMatches++;
+          else if (pts === weights.outcome) winnerMatches++;
+          else failedMatches++;
+        }
+      });
+
+      pKnockoutPreds.forEach((pred) => {
+        const match = knockoutMatches.find((m) => m.id === pred.knockout_match_id);
         if (match && match.home_actual !== null && match.away_actual !== null) {
           const pts = calculatePoints(
             pred.home_pred,
@@ -212,7 +317,9 @@ app.get("/api/leaderboard", async (req, res) => {
           exact: exactMatches,
           winner: winnerMatches,
           failed: failedMatches,
-          totalPredicted: pPreds.filter(pred => pred.home_pred !== null && pred.away_pred !== null).length
+          totalPredicted:
+            pPreds.filter(pred => pred.home_pred !== null && pred.away_pred !== null).length +
+            pKnockoutPreds.filter(pred => pred.home_pred !== null && pred.away_pred !== null).length
         }
       };
     });
@@ -409,7 +516,147 @@ app.put("/api/settings", requireAdmin, async (req, res) => {
   }
 });
 
-// 11. Sync match results with Live API (ADMIN ONLY)
+// 11. Get knockout prediction form data
+app.get("/api/knockout", async (req, res) => {
+  try {
+    const matches = await dbAll("SELECT * FROM knockout_matches ORDER BY match_order ASC");
+    const participants = await dbAll("SELECT id, name FROM participants ORDER BY name ASC");
+    const predictionCounts = await dbAll(`
+      SELECT participant_id, COUNT(*) AS count
+      FROM knockout_predictions
+      WHERE home_pred IS NOT NULL AND away_pred IS NOT NULL
+      GROUP BY participant_id
+    `);
+
+    res.json({
+      deadline: KNOCKOUT_DEADLINE,
+      locked: isKnockoutLocked(),
+      matches,
+      participants,
+      predictionCounts,
+    });
+  } catch (error) {
+    console.error("Knockout load error:", error);
+    res.status(500).json({ error: "Failed to load knockout data." });
+  }
+});
+
+// 12. Get one participant's knockout predictions
+app.get("/api/knockout/predictions/:participantId", async (req, res) => {
+  try {
+    const participant = await dbGet("SELECT id, name FROM participants WHERE id = ?", [
+      req.params.participantId,
+    ]);
+    if (!participant) {
+      return res.status(404).json({ error: "Participant not found." });
+    }
+
+    const rows = await dbAll(
+      "SELECT * FROM knockout_predictions WHERE participant_id = ?",
+      [participant.id]
+    );
+
+    res.json({
+      participant,
+      predictions: rows,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to load knockout predictions." });
+  }
+});
+
+// 13. Save knockout predictions before the deadline
+app.post("/api/knockout/predictions", async (req, res) => {
+  if (isKnockoutLocked()) {
+    return res.status(403).json({
+      error: "El plazo para enviar pronósticos de eliminatorias ya terminó.",
+    });
+  }
+
+  const { participant_id, predictions } = req.body;
+  if (!participant_id || !Array.isArray(predictions)) {
+    return res.status(400).json({ error: "Participant and predictions are required." });
+  }
+
+  try {
+    const participant = await dbGet("SELECT id FROM participants WHERE id = ?", [participant_id]);
+    if (!participant) {
+      return res.status(404).json({ error: "Participant not found." });
+    }
+
+    const matches = await dbAll("SELECT id FROM knockout_matches");
+    const validMatchIds = new Set(matches.map((m) => m.id));
+
+    for (const pred of predictions) {
+      if (!validMatchIds.has(Number(pred.match_id))) {
+        return res.status(400).json({ error: "Invalid knockout match." });
+      }
+
+      const home = parseScore(pred.home_pred);
+      const away = parseScore(pred.away_pred);
+      if (home === null || away === null || Number.isNaN(home) || Number.isNaN(away)) {
+        return res.status(400).json({
+          error: "Todos los pronósticos deben tener marcadores válidos.",
+        });
+      }
+    }
+
+    for (const pred of predictions) {
+      const home = parseScore(pred.home_pred);
+      const away = parseScore(pred.away_pred);
+      await dbRun(
+        `INSERT INTO knockout_predictions
+          (participant_id, knockout_match_id, home_pred, away_pred, submitted_at)
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(participant_id, knockout_match_id)
+         DO UPDATE SET
+          home_pred = excluded.home_pred,
+          away_pred = excluded.away_pred,
+          submitted_at = CURRENT_TIMESTAMP`,
+        [participant.id, Number(pred.match_id), home, away]
+      );
+    }
+
+    res.json({ message: "Pronósticos de eliminatorias guardados con éxito." });
+  } catch (error) {
+    console.error("Knockout prediction save error:", error);
+    res.status(500).json({ error: "Failed to save knockout predictions." });
+  }
+});
+
+// 14. Update knockout match teams/result (ADMIN ONLY)
+app.put("/api/knockout/matches/:id", requireAdmin, async (req, res) => {
+  const { home_team, away_team, home_actual, away_actual } = req.body;
+  const homeActual = parseScore(home_actual);
+  const awayActual = parseScore(away_actual);
+
+  if (!home_team || !away_team || home_team.trim() === "" || away_team.trim() === "") {
+    return res.status(400).json({ error: "Both team names are required." });
+  }
+
+  if (Number.isNaN(homeActual) || Number.isNaN(awayActual)) {
+    return res.status(400).json({ error: "Invalid score values." });
+  }
+
+  try {
+    const result = await dbRun(
+      `UPDATE knockout_matches
+       SET home_team = ?, away_team = ?, home_actual = ?, away_actual = ?
+       WHERE id = ?`,
+      [home_team.trim(), away_team.trim(), homeActual, awayActual, req.params.id]
+    );
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: "Knockout match not found." });
+    }
+
+    res.json({ message: "Knockout match updated successfully." });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update knockout match." });
+  }
+});
+
+// 15. Sync match results with Live API (ADMIN ONLY)
 app.post("/api/matches/sync", requireAdmin, async (req, res) => {
   const apiKey = process.env.FOOTBALL_API_KEY;
   if (!apiKey) {
@@ -487,6 +734,12 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+dbReady
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server listening on port ${PORT}`);
+    });
+  })
+  .catch(() => {
+    process.exit(1);
+  });

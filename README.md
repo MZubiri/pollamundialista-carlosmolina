@@ -57,6 +57,7 @@ Para desplegar este proyecto en tu servidor de Oracle Cloud usando Coolify, sigu
    *   Añade las variables necesarias en el apartado de variables de Coolify:
        *   `PORT=3001` (Puerto interno expuesto por el contenedor).
        *   `FOOTBALL_API_KEY` = *[Tu clave de API de Football-Data.org]* (opcional, para actualización en tiempo real).
+       *   `KNOCKOUT_PREDICTIONS_DEADLINE=2026-06-28T14:00:00-05:00` (opcional, fecha límite para cerrar pronósticos de eliminatorias).
 5. **Configurar Almacenamiento Persistente (Opcional pero Recomendado)**:
    *   Dado que SQLite guarda la base de datos en un archivo local (`/app/db/database.db`), si el contenedor se reinicia o se redespliega sin volumen persistente, se perderán las correcciones manuales realizadas.
    *   En la pestaña **Storage** de la aplicación en Coolify, añade una montura persistente:
