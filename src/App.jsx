@@ -3,7 +3,6 @@ import {
   Trophy,
   Users,
   Settings,
-  RefreshCw,
   X,
   Edit2,
   Save,
@@ -16,12 +15,11 @@ import {
   Sliders,
   Lock,
   Unlock,
-  ShieldCheck,
   CalendarClock
 } from "lucide-react";
 
 export default function App() {
-  const [view, setView] = useState("leaderboard"); // leaderboard, knockout, admin
+  const [view, setView] = useState("leaderboard"); // leaderboard, admin
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -42,7 +40,6 @@ export default function App() {
   
   // Admin states
   const [adminTab, setAdminTab] = useState("matches"); // matches, knockout, participants, settings
-  const [syncing, setSyncing] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState(null); // { id, name, predictions }
   const [editPredChanges, setEditPredChanges] = useState({}); // { matchId: { homePred, awayPred } }
   const [matchScoreChanges, setMatchScoreChanges] = useState({}); // { matchId: { homeActual, awayActual } }
@@ -65,10 +62,10 @@ export default function App() {
   };
 
   // Helper for admin fetches
-  const adminHeaders = () => {
+  const adminHeaders = (password = adminPassword) => {
     return {
       "Content-Type": "application/json",
-      "Authorization": adminPassword
+      "Authorization": password
     };
   };
 
@@ -108,9 +105,12 @@ export default function App() {
     }
   };
 
-  const fetchKnockout = async () => {
+  const fetchKnockout = async (password = adminPassword) => {
     try {
-      const res = await fetch("/api/knockout");
+      const res = await fetch("/api/knockout", {
+        headers: adminHeaders(password)
+      });
+      if (checkAuthError(res)) return;
       if (!res.ok) throw new Error("Error fetching knockout matches");
       const data = await res.json();
       setKnockoutData(data);
@@ -137,7 +137,10 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`/api/knockout/predictions/${participantId}`);
+      const res = await fetch(`/api/knockout/predictions/${participantId}`, {
+        headers: adminHeaders()
+      });
+      if (checkAuthError(res)) return;
       if (!res.ok) throw new Error("Error fetching knockout predictions");
       const data = await res.json();
       const existingByMatch = {};
@@ -207,7 +210,6 @@ export default function App() {
   useEffect(() => {
     fetchLeaderboard();
     fetchSettings();
-    fetchKnockout();
     const savedPassword = localStorage.getItem("adminPassword");
     if (savedPassword) {
       verifyStoredPassword(savedPassword);
@@ -265,6 +267,7 @@ export default function App() {
       setView("admin");
       fetchMatches();
       fetchSettings();
+      fetchKnockout(loginPasswordInput);
     } catch (err) {
       addToast(err.message, "error");
     }
@@ -276,34 +279,6 @@ export default function App() {
     localStorage.removeItem("adminPassword");
     setView("leaderboard");
     addToast("Sesión de administrador cerrada.");
-  };
-
-  // Handle API sync (Admin Only)
-  const handleApiSync = async () => {
-    if (!isAdmin) {
-      setShowLoginModal(true);
-      return;
-    }
-    setSyncing(true);
-    try {
-      const res = await fetch("/api/matches/sync", { 
-        method: "POST",
-        headers: adminHeaders()
-      });
-      if (checkAuthError(res)) return;
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Sync failed");
-      addToast(data.message || "Sync completed successfully!");
-      fetchLeaderboard();
-      if (view === "admin") {
-        fetchMatches();
-      }
-    } catch (err) {
-      addToast(err.message, "error");
-    } finally {
-      setSyncing(false);
-    }
   };
 
   // Update Match Actual Score (Admin Only)
@@ -453,12 +428,13 @@ export default function App() {
     try {
       const res = await fetch("/api/knockout/predictions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(),
         body: JSON.stringify({
           participant_id: Number(selectedKnockoutParticipantId),
           predictions
         })
       });
+      if (checkAuthError(res)) return;
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudieron guardar los pronósticos");
       addToast(data.message || "Pronósticos guardados.");
@@ -526,6 +502,11 @@ export default function App() {
   const knockoutSubmittedParticipants = Object.values(knockoutPredictionCounts).filter(
     (count) => count === knockoutData?.matches?.length
   ).length;
+  const getRankClass = (rank) => {
+    if (rank === 1) return "rank-1";
+    if (rank === 2) return "rank-2";
+    return "rank-3";
+  };
 
   return (
     <div className="app-container">
@@ -538,16 +519,6 @@ export default function App() {
         <div className="nav-actions">
           {view === "leaderboard" ? (
             <>
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setView("knockout");
-                  fetchKnockout();
-                }}
-              >
-                <ShieldCheck size={18} />
-                Pronosticar Eliminatorias
-              </button>
               {isAdmin ? (
                 <>
                   <button
@@ -567,51 +538,6 @@ export default function App() {
                     Cerrar Admin
                   </button>
                 </>
-              ) : (
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowLoginModal(true)}
-                >
-                  <Unlock size={18} />
-                  Ingresar Admin
-                </button>
-              )}
-              {isAdmin && (
-                <button
-                  className="btn btn-primary"
-                  onClick={handleApiSync}
-                  disabled={syncing}
-                >
-                  <RefreshCw size={18} className={syncing ? "animate-spin" : ""} />
-                  {syncing ? "Sincronizando..." : "Sincronizar Resultados"}
-                </button>
-              )}
-            </>
-          ) : view === "knockout" ? (
-            <>
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  setView("leaderboard");
-                  fetchLeaderboard();
-                }}
-              >
-                <Users size={18} />
-                Ver Tabla General
-              </button>
-              {isAdmin ? (
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setView("admin");
-                    fetchMatches();
-                    fetchSettings();
-                    fetchKnockout();
-                  }}
-                >
-                  <Settings size={18} />
-                  Panel Admin
-                </button>
               ) : (
                 <button
                   className="btn btn-secondary"
@@ -652,7 +578,7 @@ export default function App() {
               {/* Second Place */}
               {podium[1] && (
                 <div className="podium-card second">
-                  <div className="podium-rank rank-2">2</div>
+                  <div className={`podium-rank ${getRankClass(podium[1].rank)}`}>{podium[1].rank}</div>
                   <div className="podium-name">{podium[1].name}</div>
                   <div className="podium-points">{podium[1].totalPoints} pts</div>
                   <div className="podium-stats">
@@ -672,7 +598,7 @@ export default function App() {
               {/* First Place */}
               {podium[0] && (
                 <div className="podium-card first">
-                  <div className="podium-rank rank-1">1</div>
+                  <div className={`podium-rank ${getRankClass(podium[0].rank)}`}>{podium[0].rank}</div>
                   <Trophy size={40} style={{ color: "hsl(var(--accent-gold))", marginBottom: "0.5rem" }} />
                   <div className="podium-name">{podium[0].name}</div>
                   <div className="podium-points">{podium[0].totalPoints} pts</div>
@@ -693,7 +619,7 @@ export default function App() {
               {/* Third Place */}
               {podium[2] && (
                 <div className="podium-card third">
-                  <div className="podium-rank rank-3">3</div>
+                  <div className={`podium-rank ${getRankClass(podium[2].rank)}`}>{podium[2].rank}</div>
                   <div className="podium-name">{podium[2].name}</div>
                   <div className="podium-points">{podium[2].totalPoints} pts</div>
                   <div className="podium-stats">
@@ -756,9 +682,9 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {restOfList.map((p, index) => (
+                    {restOfList.map((p) => (
                       <tr key={p.id} onClick={() => setSelectedParticipantId(p.id)}>
-                        <td className="rank-col">#{index + 1}</td>
+                        <td className="rank-col">#{p.rank}</td>
                         <td className="name-col">{p.name}</td>
                         <td style={{ textAlign: "center", color: "hsl(var(--primary))", fontWeight: "600" }}>
                           {p.stats.exact}
@@ -787,123 +713,6 @@ export default function App() {
             </div>
           </div>
         </>
-      )}
-
-      {/* Knockout Prediction View */}
-      {view === "knockout" && (
-        <div className="dashboard-grid">
-          <section className="knockout-panel">
-            <div className="knockout-header">
-              <div>
-                <h2 className="table-title">Pronósticos Eliminatorias</h2>
-                <div className="deadline-row">
-                  <CalendarClock size={16} />
-                  <span>
-                    Cierre: {knockoutDeadlineText || "28 jun 2026, 2:00 p. m."}
-                  </span>
-                </div>
-              </div>
-              <span className={`lock-badge ${knockoutData?.locked ? "locked" : "open"}`}>
-                {knockoutData?.locked ? "Cerrado" : "Abierto"}
-              </span>
-            </div>
-
-            {knockoutData?.locked ? (
-              <div className="knockout-alert error">
-                El formulario ya está cerrado. Desde este momento solo el administrador puede cargar resultados.
-              </div>
-            ) : (
-              <div className="knockout-alert">
-                Selecciona tu nombre, revisa tus puntos actuales y guarda todos los marcadores antes del primer partido.
-              </div>
-            )}
-
-            <div className="knockout-selector">
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Participante</label>
-                <select
-                  className="form-control"
-                  value={selectedKnockoutParticipantId}
-                  onChange={(e) => setSelectedKnockoutParticipantId(e.target.value)}
-                  disabled={knockoutData?.locked}
-                >
-                  <option value="">Selecciona tu nombre</option>
-                  {leaderboard.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} - {p.totalPoints} pts
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="current-points-box">
-                <span>Puntos actuales</span>
-                <strong>{knockoutSelectedParticipant?.totalPoints ?? "--"} pts</strong>
-              </div>
-            </div>
-
-            <div className="knockout-match-grid">
-              {knockoutData?.matches?.map((m) => (
-                <div key={m.id} className="knockout-match-card">
-                  <div className="match-meta">
-                    <span>{m.stage}</span>
-                    <span>Partido {m.id}</span>
-                  </div>
-                  <div className="knockout-teams">
-                    <span>{m.home_team}</span>
-                    <span>vs</span>
-                    <span>{m.away_team}</span>
-                  </div>
-                  <div className="knockout-score-row">
-                    <input
-                      type="number"
-                      min="0"
-                      className="score-input"
-                      value={knockoutPredChanges[m.id]?.home_pred ?? ""}
-                      disabled={!selectedKnockoutParticipantId || knockoutData?.locked}
-                      onChange={(e) =>
-                        setKnockoutPredChanges({
-                          ...knockoutPredChanges,
-                          [m.id]: {
-                            ...knockoutPredChanges[m.id],
-                            home_pred: e.target.value
-                          }
-                        })
-                      }
-                    />
-                    <span>-</span>
-                    <input
-                      type="number"
-                      min="0"
-                      className="score-input"
-                      value={knockoutPredChanges[m.id]?.away_pred ?? ""}
-                      disabled={!selectedKnockoutParticipantId || knockoutData?.locked}
-                      onChange={(e) =>
-                        setKnockoutPredChanges({
-                          ...knockoutPredChanges,
-                          [m.id]: {
-                            ...knockoutPredChanges[m.id],
-                            away_pred: e.target.value
-                          }
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="knockout-actions">
-              <button
-                className="btn btn-primary"
-                onClick={handleSaveKnockoutPredictions}
-                disabled={savingKnockout || knockoutData?.locked || !selectedKnockoutParticipantId}
-              >
-                <Save size={18} />
-                {savingKnockout ? "Guardando..." : "Guardar Pronósticos"}
-              </button>
-            </div>
-          </section>
-        </div>
       )}
 
       {/* Admin View */}
@@ -950,14 +759,6 @@ export default function App() {
                   <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.9rem" }}>
                     Introduce los marcadores finales de los partidos conforme vayan ocurriendo.
                   </p>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={handleApiSync}
-                    disabled={syncing}
-                  >
-                    <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
-                    Sincronizar vía API
-                  </button>
                 </div>
                 {matches.map((m) => (
                   <div key={m.id} className="admin-match-card">
@@ -1013,6 +814,118 @@ export default function App() {
             {/* Knockout Admin Tab */}
             {adminTab === "knockout" && (
               <div className="admin-match-list">
+                <section className="knockout-panel admin-knockout-panel">
+                  <div className="knockout-header">
+                    <div>
+                      <h3 className="table-title">Pronósticos de Participantes</h3>
+                      <div className="deadline-row">
+                        <CalendarClock size={16} />
+                        <span>
+                          Cierre: {knockoutDeadlineText || "28 jun 2026, 2:00 p. m."}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`lock-badge ${knockoutData?.locked ? "locked" : "open"}`}>
+                      {knockoutData?.locked ? "Cerrado" : "Abierto"}
+                    </span>
+                  </div>
+
+                  {knockoutData?.locked ? (
+                    <div className="knockout-alert error">
+                      El formulario ya está cerrado. Desde este momento solo se pueden cargar resultados.
+                    </div>
+                  ) : (
+                    <div className="knockout-alert">
+                      Selecciona el participante y guarda sus marcadores antes del primer partido.
+                    </div>
+                  )}
+
+                  <div className="knockout-selector">
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Participante</label>
+                      <select
+                        className="form-control"
+                        value={selectedKnockoutParticipantId}
+                        onChange={(e) => setSelectedKnockoutParticipantId(e.target.value)}
+                        disabled={knockoutData?.locked}
+                      >
+                        <option value="">Selecciona un participante</option>
+                        {leaderboard.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} - {p.totalPoints} pts
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="current-points-box">
+                      <span>Puntos actuales</span>
+                      <strong>{knockoutSelectedParticipant?.totalPoints ?? "--"} pts</strong>
+                    </div>
+                  </div>
+
+                  <div className="knockout-match-grid">
+                    {knockoutData?.matches?.map((m) => (
+                      <div key={m.id} className="knockout-match-card">
+                        <div className="match-meta">
+                          <span>{m.stage}</span>
+                          <span>Partido {m.id}</span>
+                        </div>
+                        <div className="knockout-teams">
+                          <span>{m.home_team}</span>
+                          <span>vs</span>
+                          <span>{m.away_team}</span>
+                        </div>
+                        <div className="knockout-score-row">
+                          <input
+                            type="number"
+                            min="0"
+                            className="score-input"
+                            value={knockoutPredChanges[m.id]?.home_pred ?? ""}
+                            disabled={!selectedKnockoutParticipantId || knockoutData?.locked}
+                            onChange={(e) =>
+                              setKnockoutPredChanges({
+                                ...knockoutPredChanges,
+                                [m.id]: {
+                                  ...knockoutPredChanges[m.id],
+                                  home_pred: e.target.value
+                                }
+                              })
+                            }
+                          />
+                          <span>-</span>
+                          <input
+                            type="number"
+                            min="0"
+                            className="score-input"
+                            value={knockoutPredChanges[m.id]?.away_pred ?? ""}
+                            disabled={!selectedKnockoutParticipantId || knockoutData?.locked}
+                            onChange={(e) =>
+                              setKnockoutPredChanges({
+                                ...knockoutPredChanges,
+                                [m.id]: {
+                                  ...knockoutPredChanges[m.id],
+                                  away_pred: e.target.value
+                                }
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="knockout-actions">
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleSaveKnockoutPredictions}
+                      disabled={savingKnockout || knockoutData?.locked || !selectedKnockoutParticipantId}
+                    >
+                      <Save size={18} />
+                      {savingKnockout ? "Guardando..." : "Guardar Pronósticos"}
+                    </button>
+                  </div>
+                </section>
+
                 <div className="admin-info-row">
                   <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.9rem" }}>
                     Ajusta cruces pendientes y carga los marcadores finales de eliminatorias. Los puntos se suman al marcador general al guardar resultados.

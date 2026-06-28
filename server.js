@@ -194,63 +194,6 @@ function calculatePoints(homePred, awayPred, homeActual, awayActual, weights) {
   return weights.fail;
 }
 
-const teamTranslations = {
-  "Mexico": "México",
-  "South Africa": "Sudáfrica",
-  "South Korea": "Corea del Sur",
-  "Korea Republic": "Corea del Sur",
-  "Czechia": "República Checa",
-  "Czech Republic": "República Checa",
-  "Canada": "Canadá",
-  "Bosnia and Herzegovina": "Bosnia y Herzegovina",
-  "Qatar": "Catar",
-  "Switzerland": "Suiza",
-  "Brazil": "Brasil",
-  "Morocco": "Marruecos",
-  "Haiti": "Haití",
-  "Scotland": "Escocia",
-  "United States": "Estados Unidos",
-  "USA": "Estados Unidos",
-  "Paraguay": "Paraguay",
-  "Australia": "Australia",
-  "Turkey": "Turquía",
-  "Türkiye": "Turquía",
-  "Germany": "Alemania",
-  "Curacao": "Curazao",
-  "Curaçao": "Curazao",
-  "Ivory Coast": "Costa de Marfil",
-  "Côte d'Ivoire": "Costa de Marfil",
-  "Ecuador": "Ecuador",
-  "Netherlands": "Países Bajos",
-  "Japan": "Japón",
-  "Sweden": "Suecia",
-  "Tunisia": "Túnez",
-  "Belgium": "Bélgica",
-  "Egypt": "Egipto",
-  "Iran": "Irán",
-  "New Zealand": "Nueva Zelanda",
-  "Spain": "España",
-  "Cape Verde": "Cabo Verde",
-  "Saudi Arabia": "Arabia Saudita",
-  "Uruguay": "Uruguay",
-  "France": "Francia",
-  "Senegal": "Senegal",
-  "Iraq": "Irak",
-  "Norway": "Noruega",
-  "Argentina": "Argentina",
-  "Algeria": "Argelia",
-  "Austria": "Austria",
-  "Jordan": "Jordania",
-  "Portugal": "Portugal",
-  "DR Congo": "RD Congo",
-  "Uzbekistan": "Uzbekistán",
-  "Colombia": "Colombia",
-  "England": "Inglaterra",
-  "Croatia": "Croacia",
-  "Ghana": "Ghana",
-  "Panama": "Panamá",
-};
-
 // API Endpoints
 
 // 1. Get Leaderboard
@@ -341,6 +284,16 @@ app.get("/api/leaderboard", async (req, res) => {
         return b.totalPoints - a.totalPoints;
       }
       return a.name.localeCompare(b.name, "es");
+    });
+
+    let previousPoints = null;
+    let previousRank = 0;
+    leaderboard.forEach((row, index) => {
+      if (row.totalPoints !== previousPoints) {
+        previousRank = index + 1;
+        previousPoints = row.totalPoints;
+      }
+      row.rank = previousRank;
     });
 
     res.json(leaderboard);
@@ -528,8 +481,8 @@ app.put("/api/settings", requireAdmin, async (req, res) => {
   }
 });
 
-// 11. Get knockout prediction form data
-app.get("/api/knockout", async (req, res) => {
+// 11. Get knockout prediction form data (ADMIN ONLY)
+app.get("/api/knockout", requireAdmin, async (req, res) => {
   try {
     const matches = await dbAll("SELECT * FROM knockout_matches ORDER BY match_order ASC");
     const participants = await dbAll("SELECT id, name FROM participants ORDER BY name ASC");
@@ -553,8 +506,8 @@ app.get("/api/knockout", async (req, res) => {
   }
 });
 
-// 12. Get one participant's knockout predictions
-app.get("/api/knockout/predictions/:participantId", async (req, res) => {
+// 12. Get one participant's knockout predictions (ADMIN ONLY)
+app.get("/api/knockout/predictions/:participantId", requireAdmin, async (req, res) => {
   try {
     const participant = await dbGet("SELECT id, name FROM participants WHERE id = ?", [
       req.params.participantId,
@@ -577,8 +530,8 @@ app.get("/api/knockout/predictions/:participantId", async (req, res) => {
   }
 });
 
-// 13. Save knockout predictions before the deadline
-app.post("/api/knockout/predictions", async (req, res) => {
+// 13. Save knockout predictions before the deadline (ADMIN ONLY)
+app.post("/api/knockout/predictions", requireAdmin, async (req, res) => {
   if (isKnockoutLocked()) {
     return res.status(403).json({
       error: "El plazo para enviar pronósticos de eliminatorias ya terminó.",
@@ -665,72 +618,6 @@ app.put("/api/knockout/matches/:id", requireAdmin, async (req, res) => {
     res.json({ message: "Knockout match updated successfully." });
   } catch (error) {
     res.status(500).json({ error: "Failed to update knockout match." });
-  }
-});
-
-// 15. Sync match results with Live API (ADMIN ONLY)
-app.post("/api/matches/sync", requireAdmin, async (req, res) => {
-  const apiKey = process.env.FOOTBALL_API_KEY;
-  if (!apiKey) {
-    return res.status(400).json({
-      error: "API Key (FOOTBALL_API_KEY) is not configured in environment.",
-    });
-  }
-
-  try {
-    const response = await fetch("https://api.football-data.org/v4/competitions/WC/matches", {
-      headers: { "X-Auth-Token": apiKey },
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return res.status(500).json({ error: `API sync failed: ${errText}` });
-    }
-
-    const data = await response.json();
-    const apiMatches = data.matches || [];
-    
-    const dbMatches = await dbAll("SELECT * FROM matches");
-    let updatedCount = 0;
-
-    for (const apiMatch of apiMatches) {
-      if (apiMatch.status === "FINISHED" && apiMatch.score && apiMatch.score.fullTime) {
-        const homeApiName = apiMatch.homeTeam.name;
-        const awayApiName = apiMatch.awayTeam.name;
-        
-        const homeDbName = teamTranslations[homeApiName] || homeApiName;
-        const awayDbName = teamTranslations[awayApiName] || awayApiName;
-
-        const match = dbMatches.find(
-          (m) =>
-            (m.home_team === homeDbName && m.away_team === awayDbName) ||
-            (homeDbName.includes(m.home_team) && awayDbName.includes(m.away_team))
-        );
-
-        if (match) {
-          const apiHomeScore = apiMatch.score.fullTime.home;
-          const apiAwayScore = apiMatch.score.fullTime.away;
-
-          if (
-            match.home_actual !== apiHomeScore ||
-            match.away_actual !== apiAwayScore
-          ) {
-            await dbRun(
-              "UPDATE matches SET home_actual = ?, away_actual = ? WHERE id = ?",
-              [apiHomeScore, apiAwayScore, match.id]
-            );
-            updatedCount++;
-          }
-        }
-      }
-    }
-
-    res.json({
-      message: `API Sync completed successfully! Updated ${updatedCount} matches.`,
-    });
-  } catch (error) {
-    console.error("Sync error:", error);
-    res.status(500).json({ error: `Failed to sync matches: ${error.message}` });
   }
 });
 

@@ -56,7 +56,6 @@ Para desplegar este proyecto en tu servidor de Oracle Cloud usando Coolify, sigu
 4. **Configurar Variables de Entorno (Environment Variables)**:
    *   Añade las variables necesarias en el apartado de variables de Coolify:
        *   `PORT=3001` (Puerto interno expuesto por el contenedor).
-       *   `FOOTBALL_API_KEY` = *[Tu clave de API de Football-Data.org]* (opcional, para actualización en tiempo real).
        *   `KNOCKOUT_PREDICTIONS_DEADLINE=2026-06-28T14:00:00-05:00` (opcional, fecha límite para cerrar pronósticos de eliminatorias).
 5. **Configurar Almacenamiento Persistente (Opcional pero Recomendado)**:
    *   Dado que SQLite guarda la base de datos en un archivo local (`/app/db/database.db`), si el contenedor se reinicia o se redespliega sin volumen persistente, se perderán las correcciones manuales realizadas.
@@ -68,7 +67,7 @@ Para desplegar este proyecto en tu servidor de Oracle Cloud usando Coolify, sigu
 
 ---
 
-## ⚽ Sincronización en Tiempo Real y Actualización Manual
+## ⚽ Actualización Manual
 
-*   **Sincronización Automática**: El sistema cuenta con soporte para conectarse con la API de [Football-Data.org](https://www.football-data.org/) para descargar resultados reales. Regístrate para obtener una API key gratuita e incorpórala como variable de entorno `FOOTBALL_API_KEY`. Haz clic en **Sincronizar Resultados** en el banner superior para actualizar la tabla.
-*   **Actualización Manual (Admin)**: Si no deseas usar la API o necesitas corregir un resultado, ingresa al **Panel Admin** -> **Resultados Reales**. Podrás escribir los goles de local y visitante para cada partido individualmente y guardarlos. Al guardar, el marcador general se recalculará instantáneamente.
+*   **Resultados de grupos**: Ingresa al **Panel Admin** -> **Resultados Reales**. Podrás escribir los goles de local y visitante para cada partido individualmente y guardarlos.
+*   **Eliminatorias**: Ingresa al **Panel Admin** -> **Eliminatorias** para cargar pronósticos de participantes y resultados reales. Al guardar resultados, el marcador general se recalculará instantáneamente.

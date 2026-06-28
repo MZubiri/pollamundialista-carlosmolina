@@ -584,6 +584,17 @@ body {
   box-shadow: 0 0 10px rgba(0, 242, 148, 0.1);
 }
 
+select.form-control {
+  color-scheme: dark;
+  background-color: hsl(var(--card-light));
+  color: hsl(var(--text-main));
+}
+
+select.form-control option {
+  background-color: hsl(var(--card-light));
+  color: hsl(var(--text-main));
+}
+
 /* Admin Panel Styling */
 .admin-header {
   display: flex;
@@ -838,6 +849,10 @@ body {
   padding: 1rem;
   margin-bottom: 1rem;
   gap: 1rem;
+}
+
+.admin-knockout-panel {
+  margin-bottom: 1.5rem;
 }
 
 .admin-team-editors {
