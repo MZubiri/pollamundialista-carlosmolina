@@ -40,6 +40,7 @@ export default function App() {
   
   // Admin states
   const [adminTab, setAdminTab] = useState("matches"); // matches, knockout, participants, settings
+  const [showPastGroupMatches, setShowPastGroupMatches] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState(null); // { id, name, predictions }
   const [editPredChanges, setEditPredChanges] = useState({}); // { matchId: { homePred, awayPred } }
   const [matchScoreChanges, setMatchScoreChanges] = useState({}); // { matchId: { homeActual, awayActual } }
@@ -724,7 +725,11 @@ export default function App() {
               <div className="admin-tab-buttons">
                 <button
                   className={`btn ${adminTab === "matches" ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setAdminTab("matches")}
+                  onClick={() => {
+                    setAdminTab("matches");
+                    fetchMatches();
+                    fetchKnockout();
+                  }}
                 >
                   Resultados Reales
                 </button>
@@ -755,13 +760,109 @@ export default function App() {
             {/* Matches Admin Tab */}
             {adminTab === "matches" && (
               <div className="admin-match-list">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                  <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.9rem" }}>
-                    Introduce los marcadores finales de los partidos conforme vayan ocurriendo.
-                  </p>
+                <div className="admin-info-row">
+                  <div>
+                    <h3 className="table-title">Resultados reales de eliminatorias</h3>
+                    <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.9rem", marginTop: "0.35rem" }}>
+                      Actualiza los cruces y marcadores reales de la fase actual. Al guardar, se recalcula el marcador general.
+                    </p>
+                  </div>
+                  <span className="lock-badge open">Fase actual</span>
                 </div>
-                {matches.map((m) => (
-                  <div key={m.id} className="admin-match-card">
+
+                {knockoutData?.matches?.map((m) => (
+                  <div key={m.id} className="admin-knockout-card">
+                    <div>
+                      <span className="match-chip">{m.stage} - Partido {m.id}</span>
+                      <div className="admin-team-editors">
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={knockoutAdminChanges[m.id]?.home_team ?? ""}
+                          onChange={(e) =>
+                            setKnockoutAdminChanges({
+                              ...knockoutAdminChanges,
+                              [m.id]: {
+                                ...knockoutAdminChanges[m.id],
+                                home_team: e.target.value
+                              }
+                            })
+                          }
+                        />
+                        <span>vs</span>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={knockoutAdminChanges[m.id]?.away_team ?? ""}
+                          onChange={(e) =>
+                            setKnockoutAdminChanges({
+                              ...knockoutAdminChanges,
+                              [m.id]: {
+                                ...knockoutAdminChanges[m.id],
+                                away_team: e.target.value
+                              }
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="admin-score-inputs">
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="L"
+                        className="score-input"
+                        value={knockoutAdminChanges[m.id]?.home_actual ?? ""}
+                        onChange={(e) =>
+                          setKnockoutAdminChanges({
+                            ...knockoutAdminChanges,
+                            [m.id]: {
+                              ...knockoutAdminChanges[m.id],
+                              home_actual: e.target.value
+                            }
+                          })
+                        }
+                      />
+                      <span style={{ color: "hsl(var(--text-muted))" }}>-</span>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="V"
+                        className="score-input"
+                        value={knockoutAdminChanges[m.id]?.away_actual ?? ""}
+                        onChange={(e) =>
+                          setKnockoutAdminChanges({
+                            ...knockoutAdminChanges,
+                            [m.id]: {
+                              ...knockoutAdminChanges[m.id],
+                              away_actual: e.target.value
+                            }
+                          })
+                        }
+                      />
+                      <button
+                        className="btn btn-primary"
+                        style={{ padding: "0.5rem", borderRadius: "6px" }}
+                        onClick={() => handleUpdateKnockoutMatch(m.id)}
+                      >
+                        <Save size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="past-matches-panel">
+                  <button
+                    type="button"
+                    className="past-matches-toggle"
+                    onClick={() => setShowPastGroupMatches(!showPastGroupMatches)}
+                  >
+                    <span>Partidos anteriores de fase de grupos</span>
+                    <span>{showPastGroupMatches ? "Ocultar" : "Mostrar"} ({matches.length})</span>
+                  </button>
+                  {showPastGroupMatches && matches.map((m) => (
+                    <div key={m.id} className="admin-match-card">
                     <div>
                       <span style={{ fontSize: "0.75rem", backgroundColor: "rgba(255,255,255,0.05)", padding: "0.2rem 0.4rem", borderRadius: "4px", marginRight: "0.5rem" }}>
                         ID {m.id} - GRUPO {m.group_name}
@@ -807,7 +908,8 @@ export default function App() {
                       </button>
                     </div>
                   </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
 
@@ -928,94 +1030,12 @@ export default function App() {
 
                 <div className="admin-info-row">
                   <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.9rem" }}>
-                    Ajusta cruces pendientes y carga los marcadores finales de eliminatorias. Los puntos se suman al marcador general al guardar resultados.
+                    Esta pestaña es solo para cargar los pronósticos de cada participante. Los resultados reales se cargan en la pestaña Resultados Reales.
                   </p>
                   <span className={`lock-badge ${knockoutData?.locked ? "locked" : "open"}`}>
                     {knockoutSubmittedParticipants}/{knockoutData?.participants?.length || 0} enviados
                   </span>
                 </div>
-
-                {knockoutData?.matches?.map((m) => (
-                  <div key={m.id} className="admin-knockout-card">
-                    <div>
-                      <span className="match-chip">{m.stage} - Partido {m.id}</span>
-                      <div className="admin-team-editors">
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={knockoutAdminChanges[m.id]?.home_team ?? ""}
-                          onChange={(e) =>
-                            setKnockoutAdminChanges({
-                              ...knockoutAdminChanges,
-                              [m.id]: {
-                                ...knockoutAdminChanges[m.id],
-                                home_team: e.target.value
-                              }
-                            })
-                          }
-                        />
-                        <span>vs</span>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={knockoutAdminChanges[m.id]?.away_team ?? ""}
-                          onChange={(e) =>
-                            setKnockoutAdminChanges({
-                              ...knockoutAdminChanges,
-                              [m.id]: {
-                                ...knockoutAdminChanges[m.id],
-                                away_team: e.target.value
-                              }
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="admin-score-inputs">
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="L"
-                        className="score-input"
-                        value={knockoutAdminChanges[m.id]?.home_actual ?? ""}
-                        onChange={(e) =>
-                          setKnockoutAdminChanges({
-                            ...knockoutAdminChanges,
-                            [m.id]: {
-                              ...knockoutAdminChanges[m.id],
-                              home_actual: e.target.value
-                            }
-                          })
-                        }
-                      />
-                      <span style={{ color: "hsl(var(--text-muted))" }}>-</span>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="V"
-                        className="score-input"
-                        value={knockoutAdminChanges[m.id]?.away_actual ?? ""}
-                        onChange={(e) =>
-                          setKnockoutAdminChanges({
-                            ...knockoutAdminChanges,
-                            [m.id]: {
-                              ...knockoutAdminChanges[m.id],
-                              away_actual: e.target.value
-                            }
-                          })
-                        }
-                      />
-                      <button
-                        className="btn btn-primary"
-                        style={{ padding: "0.5rem", borderRadius: "6px" }}
-                        onClick={() => handleUpdateKnockoutMatch(m.id)}
-                      >
-                        <Save size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
 

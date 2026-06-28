@@ -288,9 +288,9 @@ app.get("/api/leaderboard", async (req, res) => {
 
     let previousPoints = null;
     let previousRank = 0;
-    leaderboard.forEach((row, index) => {
+    leaderboard.forEach((row) => {
       if (row.totalPoints !== previousPoints) {
-        previousRank = index + 1;
+        previousRank += 1;
         previousPoints = row.totalPoints;
       }
       row.rank = previousRank;
