@@ -14,6 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const KNOCKOUT_DEADLINE =
   process.env.KNOCKOUT_PREDICTIONS_DEADLINE || "2026-06-28T14:00:00-05:00";
+const KNOCKOUT_FIXTURE_VERSION = "dieciseisavos_image_2026_06_27_v2";
 
 app.use(cors());
 app.use(express.json());
@@ -59,17 +60,17 @@ const defaultKnockoutMatches = [
   { id: 75, stage: "Dieciseisavos", match_order: 3, home_team: "Sudáfrica", away_team: "Canadá" },
   { id: 76, stage: "Dieciseisavos", match_order: 4, home_team: "Países Bajos", away_team: "Marruecos" },
   { id: 77, stage: "Dieciseisavos", match_order: 5, home_team: "Portugal", away_team: "Croacia" },
-  { id: 78, stage: "Dieciseisavos", match_order: 6, home_team: "España", away_team: "Rival por confirmar" },
-  { id: 79, stage: "Dieciseisavos", match_order: 7, home_team: "Suiza", away_team: "Rival por confirmar" },
-  { id: 80, stage: "Dieciseisavos", match_order: 8, home_team: "México", away_team: "Catar" },
-  { id: 81, stage: "Dieciseisavos", match_order: 9, home_team: "Brasil", away_team: "Costa de Marfil" },
-  { id: 82, stage: "Dieciseisavos", match_order: 10, home_team: "Inglaterra", away_team: "Ghana" },
-  { id: 83, stage: "Dieciseisavos", match_order: 11, home_team: "Argentina", away_team: "Cabo Verde" },
-  { id: 84, stage: "Dieciseisavos", match_order: 12, home_team: "Uruguay", away_team: "Haití" },
-  { id: 85, stage: "Dieciseisavos", match_order: 13, home_team: "Estados Unidos", away_team: "Turquía" },
-  { id: 86, stage: "Dieciseisavos", match_order: 14, home_team: "Colombia", away_team: "Uzbekistán" },
-  { id: 87, stage: "Dieciseisavos", match_order: 15, home_team: "Ecuador", away_team: "Arabia Saudita" },
-  { id: 88, stage: "Dieciseisavos", match_order: 16, home_team: "Noruega", away_team: "Japón" },
+  { id: 78, stage: "Dieciseisavos", match_order: 6, home_team: "Suiza", away_team: "Argelia" },
+  { id: 79, stage: "Dieciseisavos", match_order: 7, home_team: "Estados Unidos", away_team: "Bosnia y Herzegovina" },
+  { id: 80, stage: "Dieciseisavos", match_order: 8, home_team: "Bélgica", away_team: "Senegal" },
+  { id: 81, stage: "Dieciseisavos", match_order: 9, home_team: "Brasil", away_team: "Japón" },
+  { id: 82, stage: "Dieciseisavos", match_order: 10, home_team: "Costa de Marfil", away_team: "Noruega" },
+  { id: 83, stage: "Dieciseisavos", match_order: 11, home_team: "México", away_team: "Ecuador" },
+  { id: 84, stage: "Dieciseisavos", match_order: 12, home_team: "Inglaterra", away_team: "RD Congo" },
+  { id: 85, stage: "Dieciseisavos", match_order: 13, home_team: "Argentina", away_team: "Cabo Verde" },
+  { id: 86, stage: "Dieciseisavos", match_order: 14, home_team: "Australia", away_team: "Egipto" },
+  { id: 87, stage: "Dieciseisavos", match_order: 15, home_team: "España", away_team: "Austria" },
+  { id: 88, stage: "Dieciseisavos", match_order: 16, home_team: "Colombia", away_team: "Ghana" },
 ];
 
 function isKnockoutLocked() {
@@ -110,16 +111,27 @@ async function ensureKnockoutTables() {
     )
   `);
 
-  const existing = await dbGet("SELECT COUNT(*) AS count FROM knockout_matches");
-  if (existing.count === 0) {
+  const fixtureVersion = await dbGet("SELECT value FROM settings WHERE key = 'knockout_fixture_version'");
+  if (fixtureVersion?.value !== KNOCKOUT_FIXTURE_VERSION) {
     for (const match of defaultKnockoutMatches) {
       await dbRun(
         `INSERT INTO knockout_matches
           (id, stage, match_order, home_team, away_team, home_actual, away_actual)
-         VALUES (?, ?, ?, ?, ?, NULL, NULL)`,
+         VALUES (?, ?, ?, ?, ?, NULL, NULL)
+         ON CONFLICT(id)
+         DO UPDATE SET
+          stage = excluded.stage,
+          match_order = excluded.match_order,
+          home_team = excluded.home_team,
+          away_team = excluded.away_team`,
         [match.id, match.stage, match.match_order, match.home_team, match.away_team]
       );
     }
+
+    await dbRun(
+      "INSERT OR REPLACE INTO settings (key, value) VALUES ('knockout_fixture_version', ?)",
+      [KNOCKOUT_FIXTURE_VERSION]
+    );
   }
 }
 
