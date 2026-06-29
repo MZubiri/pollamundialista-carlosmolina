@@ -41,6 +41,7 @@ export default function App() {
   // Admin states
   const [adminTab, setAdminTab] = useState("matches"); // matches, knockout, participants, settings
   const [showPastGroupMatches, setShowPastGroupMatches] = useState(false);
+  const [showModalGroupStage, setShowModalGroupStage] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState(null); // { id, name, predictions }
   const [editPredChanges, setEditPredChanges] = useState({}); // { matchId: { homePred, awayPred } }
   const [matchScoreChanges, setMatchScoreChanges] = useState({}); // { matchId: { homeActual, awayActual } }
@@ -226,6 +227,7 @@ export default function App() {
   // Fetch Participant Detail when ID changes
   useEffect(() => {
     if (selectedParticipantId) {
+      setShowModalGroupStage(false);
       const fetchDetail = async () => {
         try {
           const res = await fetch(`/api/participants/${selectedParticipantId}`);
@@ -477,6 +479,19 @@ export default function App() {
       groups[p.groupName].push(p);
     });
     return groups;
+  };
+
+  // Group detailed predictions by Stage name (knockout stages)
+  const getKnockoutStages = (predictionsList) => {
+    if (!predictionsList) return {};
+    const stages = {};
+    predictionsList.forEach((p) => {
+      if (!stages[p.stage]) {
+        stages[p.stage] = [];
+      }
+      stages[p.stage].push(p);
+    });
+    return stages;
   };
 
   // Filter leaderboard by search term
@@ -1189,51 +1204,145 @@ export default function App() {
               </p>
             </div>
 
-            <div className="groups-container">
-              {Object.entries(getGroups(participantDetail.predictions)).map(([groupName, groupMatches]) => (
-                <div key={groupName} className="group-card">
-                  <h3 className="group-title">Grupo {groupName}</h3>
-                  <div>
-                    {groupMatches.map((m) => (
-                      <div key={m.matchId} className="match-row">
-                        <div className="team-names">
-                          <div className="team-item">
-                            <span className={`team-name ${m.homeActual > m.awayActual ? "bold" : ""}`}>
-                              {m.homeTeam}
-                            </span>
-                            {m.homeActual !== null && (
-                              <span className="score-actual">{m.homeActual}</span>
-                            )}
+            {/* Fase de Eliminatorias (Show by default) */}
+            <div style={{ marginBottom: "2rem" }}>
+              <h3 style={{
+                fontSize: "1.15rem",
+                fontWeight: "700",
+                color: "hsl(var(--primary))",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                paddingBottom: "0.5rem",
+                marginBottom: "1rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem"
+              }}>
+                <Trophy size={18} />
+                Fase de Eliminatorias
+              </h3>
+              {participantDetail.knockoutPredictions && participantDetail.knockoutPredictions.length > 0 ? (
+                <div className="groups-container">
+                  {Object.entries(getKnockoutStages(participantDetail.knockoutPredictions)).map(([stageName, stageMatches]) => (
+                    <div key={stageName} className="group-card">
+                      <h3 className="group-title">{stageName}</h3>
+                      <div>
+                        {stageMatches.map((m) => (
+                          <div key={m.matchId} className="match-row">
+                            <div className="team-names">
+                              <div className="team-item">
+                                <span className={`team-name ${m.homeActual > m.awayActual ? "bold" : ""}`}>
+                                  {m.homeTeam || "Por definir"}
+                                </span>
+                                {m.homeActual !== null && (
+                                  <span className="score-actual">{m.homeActual}</span>
+                                )}
+                              </div>
+                              <div className="team-item">
+                                <span className={`team-name ${m.awayActual > m.homeActual ? "bold" : ""}`}>
+                                  {m.awayTeam || "Por definir"}
+                                </span>
+                                {m.awayActual !== null && (
+                                  <span className="score-actual">{m.awayActual}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="score-display">
+                              <div className="pred-box">
+                                <span style={{ color: "hsl(var(--text-muted))", fontSize: "0.75rem" }}>PRON:</span>
+                                {m.homePred !== null && m.awayPred !== null ? (
+                                  <span>{m.homePred} - {m.awayPred}</span>
+                                ) : (
+                                  <span style={{ fontSize: "0.8rem", color: "hsl(var(--text-muted))" }}>S/P</span>
+                                )}
+                              </div>
+                              {m.homeActual !== null && m.awayActual !== null && (
+                                <span className={`points-badge pts-${m.points === pointsSettings.exact ? "3" : m.points === pointsSettings.outcome ? "1" : "0"}`}>
+                                  {m.points} pt{m.points !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="team-item">
-                            <span className={`team-name ${m.awayActual > m.homeActual ? "bold" : ""}`}>
-                              {m.awayTeam}
-                            </span>
-                            {m.awayActual !== null && (
-                              <span className="score-actual">{m.awayActual}</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="score-display">
-                          <div className="pred-box">
-                            <span style={{ color: "hsl(var(--text-muted))", fontSize: "0.75rem" }}>PRON:</span>
-                            {m.homePred !== null && m.awayPred !== null ? (
-                              <span>{m.homePred} - {m.awayPred}</span>
-                            ) : (
-                              <span style={{ fontSize: "0.8rem", color: "hsl(var(--text-muted))" }}>S/P</span>
-                            )}
-                          </div>
-                          {m.homeActual !== null && m.awayActual !== null && (
-                            <span className={`points-badge pts-${m.points === pointsSettings.exact ? "3" : m.points === pointsSettings.outcome ? "1" : "0"}`}>
-                              {m.points} pt{m.points !== 1 ? "s" : ""}
-                            </span>
-                          )}
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.9rem", textAlign: "center", padding: "1rem" }}>
+                  No hay pronósticos de eliminatorias cargados para este participante.
+                </p>
+              )}
+            </div>
+
+            {/* Fase de Grupos (Collapsed by default) */}
+            <div style={{ marginBottom: "1rem" }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowModalGroupStage(!showModalGroupStage)}
+                style={{
+                  width: "100%",
+                  justifyContent: "space-between",
+                  padding: "0.75rem 1rem",
+                  fontSize: "0.95rem",
+                  fontWeight: "600",
+                  backgroundColor: "rgba(255, 255, 255, 0.02)",
+                  border: "1px solid rgba(255, 255, 255, 0.05)"
+                }}
+              >
+                <span>Fase de Grupos (Partidos Anteriores)</span>
+                <span style={{ fontSize: "0.8rem", color: "hsl(var(--text-muted))" }}>
+                  {showModalGroupStage ? "Ocultar ▲" : "Mostrar ▼"}
+                </span>
+              </button>
+
+              {showModalGroupStage && (
+                <div style={{ marginTop: "1.5rem" }} className="groups-container">
+                  {Object.entries(getGroups(participantDetail.predictions)).map(([groupName, groupMatches]) => (
+                    <div key={groupName} className="group-card">
+                      <h3 className="group-title">Grupo {groupName}</h3>
+                      <div>
+                        {groupMatches.map((m) => (
+                          <div key={m.matchId} className="match-row">
+                            <div className="team-names">
+                              <div className="team-item">
+                                <span className={`team-name ${m.homeActual > m.awayActual ? "bold" : ""}`}>
+                                  {m.homeTeam}
+                                </span>
+                                {m.homeActual !== null && (
+                                  <span className="score-actual">{m.homeActual}</span>
+                                )}
+                              </div>
+                              <div className="team-item">
+                                <span className={`team-name ${m.awayActual > m.homeActual ? "bold" : ""}`}>
+                                  {m.awayTeam}
+                                </span>
+                                {m.awayActual !== null && (
+                                  <span className="score-actual">{m.awayActual}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="score-display">
+                              <div className="pred-box">
+                                <span style={{ color: "hsl(var(--text-muted))", fontSize: "0.75rem" }}>PRON:</span>
+                                {m.homePred !== null && m.awayPred !== null ? (
+                                  <span>{m.homePred} - {m.awayPred}</span>
+                                ) : (
+                                  <span style={{ fontSize: "0.8rem", color: "hsl(var(--text-muted))" }}>S/P</span>
+                                )}
+                              </div>
+                              {m.homeActual !== null && m.awayActual !== null && (
+                                <span className={`points-badge pts-${m.points === pointsSettings.exact ? "3" : m.points === pointsSettings.outcome ? "1" : "0"}`}>
+                                  {m.points} pt{m.points !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -337,6 +337,11 @@ app.get("/api/participants/:id", async (req, res) => {
       "SELECT * FROM predictions WHERE participant_id = ?",
       [participant.id]
     );
+    const knockoutMatches = await dbAll("SELECT * FROM knockout_matches ORDER BY match_order ASC");
+    const knockoutPredictions = await dbAll(
+      "SELECT * FROM knockout_predictions WHERE participant_id = ?",
+      [participant.id]
+    );
     const weights = await getSettings();
 
     const detailedPredictions = matches.map((m) => {
@@ -366,10 +371,39 @@ app.get("/api/participants/:id", async (req, res) => {
       };
     });
 
+    const detailedKnockoutPredictions = knockoutMatches.map((m) => {
+      const pred = knockoutPredictions.find((p) => p.knockout_match_id === m.id) || {
+        home_pred: null,
+        away_pred: null,
+      };
+
+      const points = calculatePoints(
+        pred.home_pred,
+        pred.away_pred,
+        m.home_actual,
+        m.away_actual,
+        weights
+      );
+
+      return {
+        matchId: m.id,
+        stage: m.stage,
+        matchOrder: m.match_order,
+        homeTeam: m.home_team,
+        awayTeam: m.away_team,
+        homeActual: m.home_actual,
+        awayActual: m.away_actual,
+        homePred: pred.home_pred,
+        awayPred: pred.away_pred,
+        points,
+      };
+    });
+
     res.json({
       id: participant.id,
       name: participant.name,
       predictions: detailedPredictions,
+      knockoutPredictions: detailedKnockoutPredictions,
     });
   } catch (error) {
     res.status(500).json({ error: "Failed to load participant detail." });
