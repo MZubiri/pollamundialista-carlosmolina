@@ -52,8 +52,8 @@ export default function App() {
   const [newNameVal, setNewNameVal] = useState("");
   
   // Scoring rules settings state
-  const [pointsSettings, setPointsSettings] = useState({ exact: 3, outcome: 1, fail: 0 });
-  const [editingSettings, setEditingSettings] = useState({ exact: 3, outcome: 1, fail: 0 });
+  const [pointsSettings, setPointsSettings] = useState({ exact: 3, outcome: 1, fail: 0, knockoutDeadline: "" });
+  const [editingSettings, setEditingSettings] = useState({ exact: 3, outcome: 1, fail: 0, knockoutDeadline: "" });
   
   // Toasts
   const [toasts, setToasts] = useState([]);
@@ -1309,8 +1309,19 @@ export default function App() {
                   />
                 </div>
                 
+                <div className="form-group">
+                  <label className="form-label">Fecha Límite para Eliminatorias (Formato ISO, Ej: 2026-07-20T23:59:59-05:00)</label>
+                  <input
+                    type="text"
+                    placeholder="YYYY-MM-DDTHH:MM:SS-05:00"
+                    className="form-control"
+                    value={editingSettings.knockoutDeadline || ""}
+                    onChange={(e) => setEditingSettings({ ...editingSettings, knockoutDeadline: e.target.value })}
+                  />
+                </div>
+                
                 <button className="btn btn-primary" onClick={handleSaveSettings} style={{ marginTop: "1rem" }}>
-                  <Save size={18} /> Guardar Reglas de Puntuación
+                  <Save size={18} /> Guardar Reglas y Fecha Límite
                 </button>
               </div>
             )}

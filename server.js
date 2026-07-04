@@ -81,8 +81,21 @@ const defaultKnockoutMatches = [
   { id: 96, stage: "Octavos", match_order: 24, home_team: "Suiza", away_team: "Colombia" },
 ];
 
-function isKnockoutLocked() {
-  return Date.now() >= new Date(KNOCKOUT_DEADLINE).getTime();
+async function getKnockoutDeadline() {
+  try {
+    const row = await dbGet("SELECT value FROM settings WHERE key = 'knockout_deadline'");
+    if (row && row.value) {
+      return row.value;
+    }
+  } catch (e) {
+    console.error("Error reading knockout_deadline:", e);
+  }
+  return KNOCKOUT_DEADLINE;
+}
+
+async function isKnockoutLocked() {
+  const deadline = await getKnockoutDeadline();
+  return Date.now() >= new Date(deadline).getTime();
 }
 
 function parseScore(value) {
@@ -499,7 +512,8 @@ app.put("/api/matches/:id", requireAdmin, async (req, res) => {
 app.get("/api/settings", async (req, res) => {
   try {
     const weights = await getSettings();
-    res.json(weights);
+    const knockoutDeadline = await getKnockoutDeadline();
+    res.json({ ...weights, knockoutDeadline });
   } catch (error) {
     res.status(500).json({ error: "Failed to load settings." });
   }
@@ -507,7 +521,7 @@ app.get("/api/settings", async (req, res) => {
 
 // 10. Update Points Settings (ADMIN ONLY)
 app.put("/api/settings", requireAdmin, async (req, res) => {
-  const { exact, outcome, fail } = req.body;
+  const { exact, outcome, fail, knockoutDeadline } = req.body;
 
   if (exact === undefined || outcome === undefined || fail === undefined) {
     return res.status(400).json({ error: "All setting values (exact, outcome, fail) are required." });
@@ -517,6 +531,9 @@ app.put("/api/settings", requireAdmin, async (req, res) => {
     await dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('points_exact', ?)", [parseInt(exact)]);
     await dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('points_outcome', ?)", [parseInt(outcome)]);
     await dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('points_fail', ?)", [parseInt(fail)]);
+    if (knockoutDeadline !== undefined) {
+      await dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('knockout_deadline', ?)", [knockoutDeadline]);
+    }
     res.json({ message: "Settings updated successfully." });
   } catch (error) {
     res.status(500).json({ error: "Failed to update settings." });
@@ -536,8 +553,8 @@ app.get("/api/knockout", requireAdmin, async (req, res) => {
     `);
 
     res.json({
-      deadline: KNOCKOUT_DEADLINE,
-      locked: isKnockoutLocked(),
+      deadline: await getKnockoutDeadline(),
+      locked: await isKnockoutLocked(),
       matches,
       participants,
       predictionCounts,
@@ -574,7 +591,7 @@ app.get("/api/knockout/predictions/:participantId", requireAdmin, async (req, re
 
 // 13. Save knockout predictions before the deadline (ADMIN ONLY)
 app.post("/api/knockout/predictions", requireAdmin, async (req, res) => {
-  if (isKnockoutLocked()) {
+  if (await isKnockoutLocked()) {
     return res.status(403).json({
       error: "El plazo para enviar pronósticos de eliminatorias ya terminó.",
     });
