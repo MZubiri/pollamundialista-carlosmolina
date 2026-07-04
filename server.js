@@ -13,8 +13,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 const KNOCKOUT_DEADLINE =
-  process.env.KNOCKOUT_PREDICTIONS_DEADLINE || "2026-06-28T14:00:00-05:00";
-const KNOCKOUT_FIXTURE_VERSION = "dieciseisavos_image_2026_06_27_v2";
+  process.env.KNOCKOUT_PREDICTIONS_DEADLINE || "2026-07-20T23:59:59-05:00";
+const KNOCKOUT_FIXTURE_VERSION = "octavos_2026_07_04_v2";
 
 app.use(cors());
 app.use(express.json());
@@ -71,6 +71,14 @@ const defaultKnockoutMatches = [
   { id: 86, stage: "Dieciseisavos", match_order: 14, home_team: "Australia", away_team: "Egipto" },
   { id: 87, stage: "Dieciseisavos", match_order: 15, home_team: "España", away_team: "Austria" },
   { id: 88, stage: "Dieciseisavos", match_order: 16, home_team: "Colombia", away_team: "Ghana" },
+  { id: 89, stage: "Octavos", match_order: 17, home_team: "Canadá", away_team: "Marruecos" },
+  { id: 90, stage: "Octavos", match_order: 18, home_team: "Paraguay", away_team: "Francia" },
+  { id: 91, stage: "Octavos", match_order: 19, home_team: "Brasil", away_team: "Noruega" },
+  { id: 92, stage: "Octavos", match_order: 20, home_team: "México", away_team: "Inglaterra" },
+  { id: 93, stage: "Octavos", match_order: 21, home_team: "Portugal", away_team: "España" },
+  { id: 94, stage: "Octavos", match_order: 22, home_team: "Estados Unidos", away_team: "Bélgica" },
+  { id: 95, stage: "Octavos", match_order: 23, home_team: "Argentina", away_team: "Egipto" },
+  { id: 96, stage: "Octavos", match_order: 24, home_team: "Suiza", away_team: "Colombia" },
 ];
 
 function isKnockoutLocked() {
@@ -593,9 +601,9 @@ app.post("/api/knockout/predictions", requireAdmin, async (req, res) => {
 
       const home = parseScore(pred.home_pred);
       const away = parseScore(pred.away_pred);
-      if (home === null || away === null || Number.isNaN(home) || Number.isNaN(away)) {
+      if ((home === null && away !== null) || (home !== null && away === null) || Number.isNaN(home) || Number.isNaN(away)) {
         return res.status(400).json({
-          error: "Todos los pronósticos deben tener marcadores válidos.",
+          error: "Los pronósticos deben tener marcadores numéricos válidos.",
         });
       }
     }
@@ -603,6 +611,9 @@ app.post("/api/knockout/predictions", requireAdmin, async (req, res) => {
     for (const pred of predictions) {
       const home = parseScore(pred.home_pred);
       const away = parseScore(pred.away_pred);
+      if (home === null || away === null) {
+        continue;
+      }
       await dbRun(
         `INSERT INTO knockout_predictions
           (participant_id, knockout_match_id, home_pred, away_pred, submitted_at)
