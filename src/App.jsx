@@ -15,7 +15,8 @@ import {
   Sliders,
   Lock,
   Unlock,
-  CalendarClock
+  CalendarClock,
+  TrendingUp
 } from "lucide-react";
 
 export default function App() {
@@ -61,6 +62,13 @@ export default function App() {
   // Toasts
   const [toasts, setToasts] = useState([]);
 
+  // History bump chart states
+  const [historyData, setHistoryData] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [highlightedParticipantId, setHighlightedParticipantId] = useState(null);
+  const [selectedParticipantsMap, setSelectedParticipantsMap] = useState({});
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+
   const addToast = (message, type = "success") => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -89,6 +97,28 @@ export default function App() {
       addToast(err.message, "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch History Data
+  const fetchHistoryData = async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch("/api/leaderboard/history");
+      if (!res.ok) throw new Error("Error fetching history data");
+      const data = await res.json();
+      setHistoryData(data);
+      // Select top 10 participants by default, or all if less than 10
+      const initialMap = {};
+      data.history.forEach((p) => {
+        const finalRank = p.ranks[p.ranks.length - 1];
+        initialMap[p.id] = finalRank <= 10;
+      });
+      setSelectedParticipantsMap(initialMap);
+    } catch (err) {
+      addToast(err.message, "error");
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -532,6 +562,354 @@ export default function App() {
   const knockoutSubmittedParticipants = Object.values(knockoutPredictionCounts).filter(
     (count) => count === knockoutData?.matches?.length
   ).length;
+  const renderBumpChart = () => {
+    if (historyLoading) {
+      return (
+        <div style={{ textAlign: "center", padding: "3rem" }}>
+          <div className="spinner"></div>
+          <p style={{ marginTop: "1rem", color: "hsl(var(--text-muted))" }}>Cargando historial de posiciones...</p>
+        </div>
+      );
+    }
+
+    if (!historyData || historyData.matches.length === 0) {
+      return (
+        <div className="knockout-alert" style={{ textAlign: "center", margin: "2rem auto", maxWidth: "600px", padding: "2rem" }}>
+          <AlertCircle size={32} style={{ marginBottom: "1rem" }} />
+          <h3>Sin historial disponible</h3>
+          <p style={{ marginTop: "0.5rem" }}>
+            El torneo acaba de iniciar o no se han jugado partidos todavía. 
+            El historial se activará automáticamente cuando se ingrese el resultado del primer partido de la polla.
+          </p>
+        </div>
+      );
+    }
+
+    const { matches, history } = historyData;
+    const numSteps = matches.length;
+    const totalSteps = numSteps + 1;
+
+    // Filter participants that are selected
+    const selectedParticipants = history.filter(p => selectedParticipantsMap[p.id]);
+
+    // Dimensions
+    const svgWidth = 850;
+    const svgHeight = 480;
+    const paddingLeft = 60;
+    const paddingRight = 30;
+    const paddingTop = 30;
+    const paddingBottom = 50;
+
+    const chartWidth = svgWidth - paddingLeft - paddingRight;
+    const chartHeight = svgHeight - paddingTop - paddingBottom;
+
+    const maxRank = Math.max(10, history.length); 
+
+    const getX = (stepIdx) => {
+      return paddingLeft + (stepIdx / (totalSteps - 1)) * chartWidth;
+    };
+
+    const getY = (rank) => {
+      if (maxRank === 1) return paddingTop + chartHeight / 2;
+      return paddingTop + ((rank - 1) / (maxRank - 1)) * chartHeight;
+    };
+
+    const getBezierPath = (points) => {
+      if (points.length === 0) return "";
+      let d = `M ${points[0].x} ${points[0].y}`;
+      for (let i = 0; i < points.length - 1; i++) {
+        const p0 = points[i];
+        const p1 = points[i + 1];
+        const cpX1 = p0.x + (p1.x - p0.x) / 2;
+        const cpY1 = p0.y;
+        const cpX2 = p0.x + (p1.x - p0.x) / 2;
+        const cpY2 = p1.y;
+        d += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p1.x} ${p1.y}`;
+      }
+      return d;
+    };
+
+    return (
+      <div className="history-view-container">
+        <div className="admin-info-row" style={{ marginBottom: "1.5rem" }}>
+          <div>
+            <h2 className="table-title">Historial de Clasificación</h2>
+            <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.9rem", marginTop: "0.25rem" }}>
+              Visualiza la evolución del ranking de los participantes. Selecciona qué participantes mostrar en la leyenda.
+            </p>
+          </div>
+        </div>
+
+        <div className="history-layout">
+          {/* Chart Panel */}
+          <div className="chart-panel-card">
+            <div style={{ position: "relative", width: "100%" }}>
+              <svg 
+                viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
+                className="bump-chart-svg"
+                style={{ width: "100%", height: "auto", overflow: "visible" }}
+              >
+                <defs>
+                  <linearGradient id="grid-grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.05)" />
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                  </linearGradient>
+                </defs>
+
+                {/* Y Axis Grid Lines & Labels */}
+                {Array.from({ length: 10 }).map((_, i) => {
+                  const rankVal = i + 1;
+                  const y = getY(rankVal);
+                  return (
+                    <g key={i} className="grid-group">
+                      <line 
+                        x1={paddingLeft} 
+                        y1={y} 
+                        x2={svgWidth - paddingRight} 
+                        y2={y} 
+                        stroke="rgba(255, 255, 255, 0.07)" 
+                        strokeDasharray="4"
+                      />
+                      <text 
+                        x={paddingLeft - 15} 
+                        y={y + 4} 
+                        fill="hsl(var(--text-muted))" 
+                        fontSize="0.75rem"
+                        textAnchor="end"
+                        fontWeight={rankVal <= 3 ? "bold" : "normal"}
+                      >
+                        {rankVal === 1 ? "🏆 1" : rankVal === 2 ? "🥈 2" : rankVal === 3 ? "🥉 3" : rankVal}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* X Axis Grid Lines & Labels */}
+                {Array.from({ length: totalSteps }).map((_, stepIdx) => {
+                  const x = getX(stepIdx);
+                  const isStart = stepIdx === 0;
+                  const match = isStart ? null : matches[stepIdx - 1];
+                  const label = isStart ? "Inicio" : match.label;
+                  
+                  return (
+                    <g key={stepIdx} className="grid-group">
+                      <line 
+                        x1={x} 
+                        y1={paddingTop} 
+                        x2={x} 
+                        y2={svgHeight - paddingBottom} 
+                        stroke="rgba(255, 255, 255, 0.05)"
+                      />
+                      <text 
+                        x={x} 
+                        y={svgHeight - paddingBottom + 20} 
+                        fill="hsl(var(--text-muted))" 
+                        fontSize="0.7rem"
+                        textAnchor="middle"
+                        transform={`rotate(-25, ${x}, ${svgHeight - paddingBottom + 20})`}
+                      >
+                        {label}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Background lines for non-highlighted selected participants */}
+                {selectedParticipants.map((p) => {
+                  const colorIdx = history.findIndex(h => h.id === p.id);
+                  const color = `hsl(${(colorIdx * 137.5) % 360}, 80%, 60%)`;
+                  const isHighlighted = highlightedParticipantId === p.id;
+                  const isAnyHighlighted = highlightedParticipantId !== null;
+                  
+                  const points = p.ranks.map((rank, stepIdx) => ({
+                    x: getX(stepIdx),
+                    y: getY(rank),
+                    rank,
+                    stepIdx
+                  }));
+
+                  return (
+                    <path
+                      key={p.id}
+                      d={getBezierPath(points)}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth={isHighlighted ? 4 : isAnyHighlighted ? 1 : 2}
+                      opacity={isHighlighted ? 1 : isAnyHighlighted ? 0.15 : 0.65}
+                      strokeLinecap="round"
+                      style={{ transition: "stroke-width 0.2s, opacity 0.2s" }}
+                      onMouseEnter={() => setHighlightedParticipantId(p.id)}
+                      onMouseLeave={() => setHighlightedParticipantId(null)}
+                    />
+                  );
+                })}
+
+                {/* Render interactive dots & hover triggers on top */}
+                {selectedParticipants.map((p) => {
+                  const colorIdx = history.findIndex(h => h.id === p.id);
+                  const color = `hsl(${(colorIdx * 137.5) % 360}, 80%, 60%)`;
+                  const isHighlighted = highlightedParticipantId === p.id;
+                  const isAnyHighlighted = highlightedParticipantId !== null;
+                  const showDots = isHighlighted || !isAnyHighlighted;
+
+                  return p.ranks.map((rank, stepIdx) => {
+                    const x = getX(stepIdx);
+                    const y = getY(rank);
+                    const isStart = stepIdx === 0;
+                    const match = isStart ? null : matches[stepIdx - 1];
+                    const pts = p.points[stepIdx];
+
+                    return (
+                      <g key={`${p.id}_${stepIdx}`}>
+                        {/* Visible Dot */}
+                        {showDots && (
+                          <circle
+                            cx={x}
+                            cy={y}
+                            r={isHighlighted ? 5 : 3.5}
+                            fill="hsl(var(--background))"
+                            stroke={color}
+                            strokeWidth={isHighlighted ? 3 : 2}
+                            opacity={isHighlighted ? 1 : 0.8}
+                            style={{ pointerEvents: "none" }}
+                          />
+                        )}
+
+                        {/* Interactive Large Circle for Tooltip */}
+                        <circle
+                          cx={x}
+                          cy={y}
+                          r={12}
+                          fill="transparent"
+                          cursor="pointer"
+                          onMouseEnter={(e) => {
+                            setHighlightedParticipantId(p.id);
+                            const svgRect = e.target.ownerSVGElement.getBoundingClientRect();
+                            const targetRect = e.target.getBoundingClientRect();
+                            setHoveredPoint({
+                              x: targetRect.left - svgRect.left + 12,
+                              y: targetRect.top - svgRect.top - 10,
+                              rank,
+                              points: pts,
+                              matchName: isStart ? "Inicio del torneo" : match.name,
+                              matchLabel: isStart ? "Inicio" : match.label,
+                              participantName: p.name,
+                              color
+                            });
+                          }}
+                          onMouseLeave={() => {
+                            setHighlightedParticipantId(null);
+                            setHoveredPoint(null);
+                          }}
+                        />
+                      </g>
+                    );
+                  });
+                })}
+              </svg>
+
+              {/* Tooltip Overlay */}
+              {hoveredPoint && (
+                <div 
+                  className="chart-tooltip"
+                  style={{
+                    position: "absolute",
+                    left: `${hoveredPoint.x}px`,
+                    top: `${hoveredPoint.y}px`,
+                    transform: "translate(-50%, -100%)",
+                    backgroundColor: "hsl(var(--card))",
+                    border: `1px solid ${hoveredPoint.color}`,
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.4), 0 0 10px rgba(255,255,255,0.05)",
+                    padding: "0.6rem 0.9rem",
+                    borderRadius: "8px",
+                    zIndex: 100,
+                    pointerEvents: "none",
+                    minWidth: "150px",
+                    fontSize: "0.8rem",
+                    color: "hsl(var(--text))"
+                  }}
+                >
+                  <div style={{ fontWeight: "bold", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "0.25rem", marginBottom: "0.25rem", color: hoveredPoint.color }}>
+                    {hoveredPoint.participantName}
+                  </div>
+                  <div>Partido: <span style={{ color: "hsl(var(--text-muted))" }}>{hoveredPoint.matchName} ({hoveredPoint.matchLabel})</span></div>
+                  <div>Puesto: <strong>#{hoveredPoint.rank}</strong></div>
+                  <div>Puntos acumulados: <strong style={{ color: "hsl(var(--accent))" }}>{hoveredPoint.points} pts</strong></div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar Legend Panel */}
+          <div className="legend-panel-card">
+            <h3 className="legend-title">Participantes</h3>
+            <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.75rem", marginBottom: "1rem" }}>
+              Selecciona para mostrar en la gráfica (límite recomendado: 10).
+            </p>
+
+            <div className="legend-actions">
+              <button 
+                className="btn btn-secondary" 
+                style={{ padding: "0.25rem 0.5rem", fontSize: "0.7rem", flex: 1 }}
+                onClick={() => {
+                  const allOn = {};
+                  history.forEach(p => allOn[p.id] = true);
+                  setSelectedParticipantsMap(allOn);
+                }}
+              >
+                Marcar Todos
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                style={{ padding: "0.25rem 0.5rem", fontSize: "0.7rem", flex: 1 }}
+                onClick={() => {
+                  setSelectedParticipantsMap({});
+                }}
+              >
+                Desmarcar Todos
+              </button>
+            </div>
+
+            <div className="legend-list">
+              {history.map((p) => {
+                const colorIdx = history.findIndex(h => h.id === p.id);
+                const color = `hsl(${(colorIdx * 137.5) % 360}, 80%, 60%)`;
+                const isSelected = selectedParticipantsMap[p.id];
+                const finalRank = p.ranks[p.ranks.length - 1];
+                const pts = p.points[p.points.length - 1];
+
+                return (
+                  <label 
+                    key={p.id} 
+                    className={`legend-item ${isSelected ? "selected" : ""} ${highlightedParticipantId === p.id ? "hovered" : ""}`}
+                    style={{ borderLeft: `4px solid ${color}` }}
+                    onMouseEnter={() => setHighlightedParticipantId(p.id)}
+                    onMouseLeave={() => setHighlightedParticipantId(null)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!isSelected}
+                      onChange={(e) => {
+                        setSelectedParticipantsMap({
+                          ...selectedParticipantsMap,
+                          [p.id]: e.target.checked
+                        });
+                      }}
+                    />
+                    <div className="legend-info">
+                      <span className="legend-name">{p.name}</span>
+                      <span className="legend-rank">#{finalRank} ({pts} pts)</span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const getRankClass = (rank) => {
     if (rank === 1) return "rank-1";
     if (rank === 2) return "rank-2";
@@ -547,7 +925,33 @@ export default function App() {
           <h1 className="app-title">Polla Mundial 2026</h1>
         </div>
         <div className="nav-actions">
-          {view === "leaderboard" ? (
+          {view === "leaderboard" && (
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                setView("history");
+                fetchHistoryData();
+              }}
+            >
+              <TrendingUp size={18} />
+              Evolución Clasificación
+            </button>
+          )}
+
+          {view === "history" && (
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                setView("leaderboard");
+                fetchLeaderboard();
+              }}
+            >
+              <Users size={18} />
+              Ver Tabla General
+            </button>
+          )}
+
+          {view !== "admin" ? (
             <>
               {isAdmin ? (
                 <>
@@ -744,6 +1148,9 @@ export default function App() {
           </div>
         </>
       )}
+
+      {/* Position History View */}
+      {view === "history" && renderBumpChart()}
 
       {/* Admin View */}
       {view === "admin" && isAdmin && (

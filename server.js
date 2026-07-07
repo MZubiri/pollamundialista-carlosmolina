@@ -332,6 +332,128 @@ app.get("/api/leaderboard", async (req, res) => {
   }
 });
 
+// 1b. Get Leaderboard History (Position tracking step-by-step)
+app.get("/api/leaderboard/history", async (req, res) => {
+  try {
+    const participants = await dbAll("SELECT * FROM participants");
+    const matches = await dbAll("SELECT * FROM matches");
+    const predictions = await dbAll("SELECT * FROM predictions");
+    const knockoutMatches = await dbAll("SELECT * FROM knockout_matches");
+    const knockoutPredictions = await dbAll("SELECT * FROM knockout_predictions");
+    const weights = await getSettings();
+
+    // Sort played matches chronologically
+    const playedGroupMatches = matches
+      .filter((m) => m.home_actual !== null && m.away_actual !== null)
+      .sort((a, b) => a.id - b.id)
+      .map((m) => ({
+        id: m.id,
+        isKnockout: false,
+        label: `P${m.id}`,
+        name: `${m.home_team} vs ${m.away_team}`,
+        stage: `Grupo ${m.group_name}`
+      }));
+
+    const playedKnockoutMatches = knockoutMatches
+      .filter((m) => m.home_actual !== null && m.away_actual !== null)
+      .sort((a, b) => a.id - b.id)
+      .map((m) => ({
+        id: m.id,
+        isKnockout: true,
+        label: `${m.stage === "Dieciseisavos" ? "D" : m.stage === "Octavos" ? "O" : "C"}${m.match_order || m.id}`,
+        name: `${m.home_team} vs ${m.away_team}`,
+        stage: m.stage
+      }));
+
+    const playedMatches = [...playedGroupMatches, ...playedKnockoutMatches];
+
+    // Map predictions by participant and match for quick lookup
+    const groupPredsMap = {};
+    predictions.forEach((p) => {
+      groupPredsMap[`${p.participant_id}_${p.match_id}`] = p;
+    });
+
+    const knockoutPredsMap = {};
+    knockoutPredictions.forEach((p) => {
+      knockoutPredsMap[`${p.participant_id}_${p.knockout_match_id}`] = p;
+    });
+
+    // Initialize tracking for each participant
+    const historyData = participants.map((p) => ({
+      id: p.id,
+      name: p.name,
+      points: [0], // Step 0 points
+      ranks: [1]   // Step 0 rank
+    }));
+
+    // Step-by-step points computation
+    playedMatches.forEach((match) => {
+      historyData.forEach((p) => {
+        let matchPoints = 0;
+        if (match.isKnockout) {
+          const pred = knockoutPredsMap[`${p.id}_${match.id}`];
+          const actual = knockoutMatches.find((m) => m.id === match.id);
+          if (pred && actual) {
+            matchPoints = calculatePoints(
+              pred.home_pred,
+              pred.away_pred,
+              actual.home_actual,
+              actual.away_actual,
+              weights
+            );
+          }
+        } else {
+          const pred = groupPredsMap[`${p.id}_${match.id}`];
+          const actual = matches.find((m) => m.id === match.id);
+          if (pred && actual) {
+            matchPoints = calculatePoints(
+              pred.home_pred,
+              pred.away_pred,
+              actual.home_actual,
+              actual.away_actual,
+              weights
+            );
+          }
+        }
+        const prevPoints = p.points[p.points.length - 1];
+        p.points.push(prevPoints + matchPoints);
+      });
+
+      // Calculate ranks for this step
+      const stepStandings = historyData.map((p, idx) => ({
+        idx,
+        points: p.points[p.points.length - 1],
+        name: p.name
+      }));
+
+      stepStandings.sort((a, b) => {
+        if (b.points !== a.points) {
+          return b.points - a.points;
+        }
+        return a.name.localeCompare(b.name, "es");
+      });
+
+      let currentRank = 0;
+      let prevPoints = null;
+      stepStandings.forEach((standing) => {
+        if (standing.points !== prevPoints) {
+          currentRank += 1;
+          prevPoints = standing.points;
+        }
+        historyData[standing.idx].ranks.push(currentRank);
+      });
+    });
+
+    res.json({
+      matches: playedMatches,
+      history: historyData
+    });
+  } catch (error) {
+    console.error("Leaderboard history error:", error);
+    res.status(500).json({ error: "Failed to load leaderboard history." });
+  }
+});
+
 // 2. Validate Admin Password
 app.post("/api/admin/verify", (req, res) => {
   const { password } = req.body;

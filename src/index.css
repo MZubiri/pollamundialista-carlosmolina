@@ -1213,3 +1213,117 @@ select.form-control option {
     text-align: center;
   }
 }
+
+/* --- Leaderboard History Bump Chart --- */
+.history-view-container {
+  margin-top: 1.5rem;
+}
+
+.history-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 2rem;
+  align-items: start;
+}
+
+.chart-panel-card {
+  background-color: hsl(var(--card-dark));
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+
+.legend-panel-card {
+  background-color: hsl(var(--card-dark));
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  max-height: 520px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+
+.legend-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.legend-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.legend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  flex-grow: 1;
+  padding-right: 0.25rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background-color: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.legend-item:hover, .legend-item.hovered {
+  background-color: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.1);
+}
+
+.legend-item.selected {
+  background-color: rgba(255,255,255,0.04);
+}
+
+.legend-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex-grow: 1;
+}
+
+.legend-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--text-main));
+}
+
+.legend-rank {
+  font-size: 0.75rem;
+  color: hsl(var(--text-muted));
+}
+
+/* Bump Chart SVG Interactions */
+.bump-chart-svg path {
+  cursor: pointer;
+}
+
+.grid-group text {
+  font-family: var(--font-family);
+  pointer-events: none;
+}
+
+/* Responsive History View */
+@media (max-width: 992px) {
+  .history-layout {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .legend-panel-card {
+    max-height: 350px;
+  }
+}
