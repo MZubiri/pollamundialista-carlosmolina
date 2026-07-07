@@ -45,6 +45,9 @@ export default function App() {
   const [showPastKnockout, setShowPastKnockout] = useState(false);
   const [showPastKnockoutPreds, setShowPastKnockoutPreds] = useState(false);
   const [showPastKnockoutDetail, setShowPastKnockoutDetail] = useState(false);
+  const [showPastOctavos, setShowPastOctavos] = useState(false);
+  const [showPastOctavosPreds, setShowPastOctavosPreds] = useState(false);
+  const [showPastOctavosDetail, setShowPastOctavosDetail] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState(null); // { id, name, predictions }
   const [editPredChanges, setEditPredChanges] = useState({}); // { matchId: { homePred, awayPred } }
   const [matchScoreChanges, setMatchScoreChanges] = useState({}); // { matchId: { homeActual, awayActual } }
@@ -796,7 +799,7 @@ export default function App() {
                   <span className="lock-badge open">Fase actual</span>
                 </div>
 
-                {knockoutData?.matches?.filter(m => m.stage === "Octavos").map((m) => (
+                {knockoutData?.matches?.filter(m => m.stage === "Cuartos").map((m) => (
                   <div key={m.id} className="admin-knockout-card">
                     <div>
                       <span className="match-chip">{m.stage} - Partido {m.id}</span>
@@ -877,6 +880,100 @@ export default function App() {
                     </div>
                   </div>
                 ))}
+
+                {knockoutData?.matches?.filter(m => m.stage === "Octavos").length > 0 && (
+                  <div className="past-matches-panel" style={{ marginTop: "1.5rem", marginBottom: "1.5rem" }}>
+                    <button
+                      type="button"
+                      className="past-matches-toggle"
+                      onClick={() => setShowPastOctavos(!showPastOctavos)}
+                    >
+                      <span>Fase anterior (Octavos)</span>
+                      <span>{showPastOctavos ? "Ocultar" : "Mostrar"} ({knockoutData?.matches?.filter(m => m.stage === "Octavos").length})</span>
+                    </button>
+                    {showPastOctavos && knockoutData?.matches?.filter(m => m.stage === "Octavos").map((m) => (
+                      <div key={m.id} className="admin-knockout-card" style={{ marginTop: "1rem" }}>
+                        <div>
+                          <span className="match-chip">{m.stage} - Partido {m.id}</span>
+                          <div className="admin-team-editors">
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={knockoutAdminChanges[m.id]?.home_team ?? ""}
+                              onChange={(e) =>
+                                setKnockoutAdminChanges({
+                                  ...knockoutAdminChanges,
+                                  [m.id]: {
+                                    ...knockoutAdminChanges[m.id],
+                                    home_team: e.target.value
+                                  }
+                                })
+                              }
+                            />
+                            <span>vs</span>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={knockoutAdminChanges[m.id]?.away_team ?? ""}
+                              onChange={(e) =>
+                                setKnockoutAdminChanges({
+                                  ...knockoutAdminChanges,
+                                  [m.id]: {
+                                    ...knockoutAdminChanges[m.id],
+                                    away_team: e.target.value
+                                  }
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div className="admin-score-inputs">
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="L"
+                            className="score-input"
+                            value={knockoutAdminChanges[m.id]?.home_actual ?? ""}
+                            onChange={(e) =>
+                              setKnockoutAdminChanges({
+                                ...knockoutAdminChanges,
+                                [m.id]: {
+                                  ...knockoutAdminChanges[m.id],
+                                  home_actual: e.target.value
+                                }
+                              })
+                            }
+                          />
+                          <span style={{ color: "hsl(var(--text-muted))" }}>-</span>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="V"
+                            className="score-input"
+                            value={knockoutAdminChanges[m.id]?.away_actual ?? ""}
+                            onChange={(e) =>
+                              setKnockoutAdminChanges({
+                                ...knockoutAdminChanges,
+                                [m.id]: {
+                                  ...knockoutAdminChanges[m.id],
+                                  away_actual: e.target.value
+                                }
+                              })
+                            }
+                          />
+                          <button
+                            className="btn btn-primary"
+                            style={{ padding: "0.5rem", borderRadius: "6px" }}
+                            onClick={() => handleUpdateKnockoutMatch(m.id)}
+                          >
+                            <Save size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {knockoutData?.matches?.filter(m => m.stage === "Dieciseisavos").length > 0 && (
                   <div className="past-matches-panel" style={{ marginTop: "1.5rem", marginBottom: "1.5rem" }}>
@@ -1086,7 +1183,7 @@ export default function App() {
                   </div>
 
                   <div className="knockout-match-grid">
-                    {knockoutData?.matches?.filter(m => m.stage === "Octavos").map((m) => (
+                    {knockoutData?.matches?.filter(m => m.stage === "Cuartos").map((m) => (
                       <div key={m.id} className="knockout-match-card">
                         <div className="match-meta">
                           <span>{m.stage}</span>
@@ -1135,6 +1232,72 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+
+                  {knockoutData?.matches?.filter(m => m.stage === "Octavos").length > 0 && (
+                    <div className="past-matches-panel" style={{ marginTop: "1.5rem", marginBottom: "1.5rem" }}>
+                      <button
+                        type="button"
+                        className="past-matches-toggle"
+                        onClick={() => setShowPastOctavosPreds(!showPastOctavosPreds)}
+                        style={{ width: "100%" }}
+                      >
+                        <span>Fase Anterior (Octavos)</span>
+                        <span>{showPastOctavosPreds ? "Ocultar" : "Mostrar"} ({knockoutData?.matches?.filter(m => m.stage === "Octavos").length})</span>
+                      </button>
+                      {showPastOctavosPreds && (
+                        <div className="knockout-match-grid" style={{ marginTop: "1rem" }}>
+                          {knockoutData?.matches?.filter(m => m.stage === "Octavos").map((m) => (
+                            <div key={m.id} className="knockout-match-card">
+                              <div className="match-meta">
+                                <span>{m.stage}</span>
+                                <span>Partido {m.id}</span>
+                              </div>
+                              <div className="knockout-teams">
+                                <span>{m.home_team}</span>
+                                <span>vs</span>
+                                <span>{m.away_team}</span>
+                              </div>
+                              <div className="knockout-score-row">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  className="score-input"
+                                  value={knockoutPredChanges[m.id]?.home_pred ?? ""}
+                                  disabled={!selectedKnockoutParticipantId || knockoutData?.locked}
+                                  onChange={(e) =>
+                                    setKnockoutPredChanges({
+                                      ...knockoutPredChanges,
+                                      [m.id]: {
+                                        ...knockoutPredChanges[m.id],
+                                        home_pred: e.target.value
+                                      }
+                                    })
+                                  }
+                                />
+                                <span>-</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  className="score-input"
+                                  value={knockoutPredChanges[m.id]?.away_pred ?? ""}
+                                  disabled={!selectedKnockoutParticipantId || knockoutData?.locked}
+                                  onChange={(e) =>
+                                    setKnockoutPredChanges({
+                                      ...knockoutPredChanges,
+                                      [m.id]: {
+                                        ...knockoutPredChanges[m.id],
+                                        away_pred: e.target.value
+                                      }
+                                    })
+                                  }
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {knockoutData?.matches?.filter(m => m.stage === "Dieciseisavos").length > 0 && (
                     <div className="past-matches-panel" style={{ marginTop: "1.5rem", marginBottom: "1.5rem" }}>
@@ -1404,13 +1567,13 @@ export default function App() {
               </h3>
               {participantDetail.knockoutPredictions && participantDetail.knockoutPredictions.length > 0 ? (
                 <div>
-                  {/* Active Octavos section */}
-                  {participantDetail.knockoutPredictions.filter(m => m.stage === "Octavos").length > 0 && (
+                  {/* Active Cuartos section */}
+                  {participantDetail.knockoutPredictions.filter(m => m.stage === "Cuartos").length > 0 && (
                     <div className="groups-container" style={{ marginBottom: "1.5rem" }}>
                       <div className="group-card" style={{ gridColumn: "1 / -1" }}>
-                        <h3 className="group-title">Octavos de Final</h3>
+                        <h3 className="group-title">Cuartos de Final</h3>
                         <div>
-                          {participantDetail.knockoutPredictions.filter(m => m.stage === "Octavos").map((m) => (
+                          {participantDetail.knockoutPredictions.filter(m => m.stage === "Cuartos").map((m) => (
                             <div key={m.matchId} className="match-row">
                               <div className="team-names">
                                 <div className="team-item">
@@ -1449,6 +1612,67 @@ export default function App() {
                           ))}
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Collapsible Octavos section */}
+                  {participantDetail.knockoutPredictions.filter(m => m.stage === "Octavos").length > 0 && (
+                    <div className="past-matches-panel" style={{ marginBottom: "1.5rem" }}>
+                      <button
+                        type="button"
+                        className="past-matches-toggle"
+                        onClick={() => setShowPastOctavosDetail(!showPastOctavosDetail)}
+                        style={{ width: "100%", justifyContent: "space-between", display: "flex", alignItems: "center" }}
+                      >
+                        <span>Fase Anterior (Octavos)</span>
+                        <span>{showPastOctavosDetail ? "Ocultar" : "Mostrar"} ({participantDetail.knockoutPredictions.filter(m => m.stage === "Octavos").length})</span>
+                      </button>
+                      {showPastOctavosDetail && (
+                        <div className="groups-container" style={{ marginTop: "1rem" }}>
+                          <div className="group-card" style={{ gridColumn: "1 / -1" }}>
+                            <h3 className="group-title">Octavos de Final</h3>
+                            <div>
+                              {participantDetail.knockoutPredictions.filter(m => m.stage === "Octavos").map((m) => (
+                                <div key={m.matchId} className="match-row">
+                                  <div className="team-names">
+                                    <div className="team-item">
+                                      <span className={`team-name ${m.homeActual > m.awayActual ? "bold" : ""}`}>
+                                        {m.homeTeam || "Por definir"}
+                                      </span>
+                                      {m.homeActual !== null && (
+                                        <span className="score-actual">{m.homeActual}</span>
+                                      )}
+                                    </div>
+                                    <div className="team-item">
+                                      <span className={`team-name ${m.awayActual > m.homeActual ? "bold" : ""}`}>
+                                        {m.awayTeam || "Por definir"}
+                                      </span>
+                                      {m.awayActual !== null && (
+                                        <span className="score-actual">{m.awayActual}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="score-display">
+                                    <div className="pred-box">
+                                      <span style={{ color: "hsl(var(--text-muted))", fontSize: "0.75rem" }}>PRON:</span>
+                                      {m.homePred !== null && m.awayPred !== null ? (
+                                        <span>{m.homePred} - {m.awayPred}</span>
+                                      ) : (
+                                        <span style={{ fontSize: "0.8rem", color: "hsl(var(--text-muted))" }}>S/P</span>
+                                      )}
+                                    </div>
+                                    {m.homeActual !== null && m.awayActual !== null && (
+                                      <span className={`points-badge pts-${m.points === pointsSettings.exact ? "3" : m.points === pointsSettings.outcome ? "1" : "0"}`}>
+                                        {m.points} pt{m.points !== 1 ? "s" : ""}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

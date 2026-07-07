@@ -13,8 +13,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 const KNOCKOUT_DEADLINE =
-  process.env.KNOCKOUT_PREDICTIONS_DEADLINE || "2026-07-20T23:59:59-05:00";
-const KNOCKOUT_FIXTURE_VERSION = "octavos_2026_07_04_v2";
+  process.env.KNOCKOUT_PREDICTIONS_DEADLINE || "2026-07-09T15:00:00-05:00";
+const KNOCKOUT_FIXTURE_VERSION = "cuartos_2026_07_07_v1";
 
 app.use(cors());
 app.use(express.json());
@@ -79,6 +79,10 @@ const defaultKnockoutMatches = [
   { id: 94, stage: "Octavos", match_order: 22, home_team: "Estados Unidos", away_team: "Bélgica" },
   { id: 95, stage: "Octavos", match_order: 23, home_team: "Argentina", away_team: "Egipto" },
   { id: 96, stage: "Octavos", match_order: 24, home_team: "Suiza", away_team: "Colombia" },
+  { id: 97, stage: "Cuartos", match_order: 25, home_team: "Francia", away_team: "Marruecos" },
+  { id: 98, stage: "Cuartos", match_order: 26, home_team: "España", away_team: "Bélgica" },
+  { id: 99, stage: "Cuartos", match_order: 27, home_team: "Noruega", away_team: "Inglaterra" },
+  { id: 100, stage: "Cuartos", match_order: 28, home_team: "Argentina", away_team: "Suiza" },
 ];
 
 async function getKnockoutDeadline() {
@@ -152,6 +156,10 @@ async function ensureKnockoutTables() {
     await dbRun(
       "INSERT OR REPLACE INTO settings (key, value) VALUES ('knockout_fixture_version', ?)",
       [KNOCKOUT_FIXTURE_VERSION]
+    );
+    await dbRun(
+      "INSERT OR REPLACE INTO settings (key, value) VALUES ('knockout_deadline', ?)",
+      [KNOCKOUT_DEADLINE]
     );
   }
 }
