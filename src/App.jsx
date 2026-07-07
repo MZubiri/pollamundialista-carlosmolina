@@ -68,6 +68,7 @@ export default function App() {
   const [highlightedParticipantId, setHighlightedParticipantId] = useState(null);
   const [selectedParticipantsMap, setSelectedParticipantsMap] = useState({});
   const [hoveredPoint, setHoveredPoint] = useState(null);
+  const [selectedRoundFilter, setSelectedRoundFilter] = useState("all");
 
   const addToast = (message, type = "success") => {
     const id = Date.now();
@@ -108,11 +109,11 @@ export default function App() {
       if (!res.ok) throw new Error("Error fetching history data");
       const data = await res.json();
       setHistoryData(data);
-      // Select top 10 participants by default, or all if less than 10
+      // Select top 5 participants by default, or all if less than 5
       const initialMap = {};
       data.history.forEach((p) => {
-        const finalRank = p.ranks[p.ranks.length - 1];
-        initialMap[p.id] = finalRank <= 10;
+        const finalRank = p.ranks.length > 0 ? p.ranks[p.ranks.length - 1] : 1;
+        initialMap[p.id] = finalRank <= 5;
       });
       setSelectedParticipantsMap(initialMap);
     } catch (err) {
@@ -586,8 +587,26 @@ export default function App() {
     }
 
     const { matches, history } = historyData;
-    const numSteps = matches.length;
-    const totalSteps = numSteps + 1;
+
+    // Filters / Rounds configuration
+    const rounds = [
+      { id: "all", label: "Todas las Rondas" },
+      { id: "grupos", label: "Fase de Grupos" },
+      { id: "dieciseisavos", label: "Ronda de 32" },
+      { id: "octavos", label: "Ronda de 16" },
+      { id: "cuartos", label: "Cuartos de Final" }
+    ];
+
+    // Filter matches and track their original indexes in history arrays
+    const matchesWithOriginalIndex = matches.map((m, idx) => ({ ...m, originalIdx: idx }));
+    const filteredMatches = matchesWithOriginalIndex.filter((m) => {
+      if (selectedRoundFilter === "all") return true;
+      if (selectedRoundFilter === "grupos") return !m.isKnockout;
+      if (selectedRoundFilter === "dieciseisavos") return m.stage === "Dieciseisavos";
+      if (selectedRoundFilter === "octavos") return m.stage === "Octavos";
+      if (selectedRoundFilter === "cuartos") return m.stage === "Cuartos";
+      return true;
+    });
 
     // Filter participants that are selected
     const selectedParticipants = history.filter(p => selectedParticipantsMap[p.id]);
@@ -605,8 +624,9 @@ export default function App() {
 
     const maxRank = Math.max(10, history.length); 
 
-    const getX = (stepIdx) => {
-      return paddingLeft + (stepIdx / (totalSteps - 1)) * chartWidth;
+    const getX = (filterIdx) => {
+      if (filteredMatches.length <= 1) return paddingLeft + chartWidth / 2;
+      return paddingLeft + (filterIdx / (filteredMatches.length - 1)) * chartWidth;
     };
 
     const getY = (rank) => {
@@ -643,208 +663,221 @@ export default function App() {
         <div className="history-layout">
           {/* Chart Panel */}
           <div className="chart-panel-card">
-            <div style={{ position: "relative", width: "100%" }}>
-              <svg 
-                viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
-                className="bump-chart-svg"
-                style={{ width: "100%", height: "auto", overflow: "visible" }}
-              >
-                <defs>
-                  <linearGradient id="grid-grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.05)" />
-                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-                  </linearGradient>
-                </defs>
+            {/* Round Filter Tabs */}
+            <div className="round-filter-tabs">
+              {rounds.map((r) => (
+                <button
+                  key={r.id}
+                  className={`round-filter-tab ${selectedRoundFilter === r.id ? "active" : ""}`}
+                  onClick={() => setSelectedRoundFilter(r.id)}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
 
-                {/* Y Axis Grid Lines & Labels */}
-                {Array.from({ length: 10 }).map((_, i) => {
-                  const rankVal = i + 1;
-                  const y = getY(rankVal);
-                  return (
-                    <g key={i} className="grid-group">
-                      <line 
-                        x1={paddingLeft} 
-                        y1={y} 
-                        x2={svgWidth - paddingRight} 
-                        y2={y} 
-                        stroke="rgba(255, 255, 255, 0.07)" 
-                        strokeDasharray="4"
-                      />
-                      <text 
-                        x={paddingLeft - 15} 
-                        y={y + 4} 
-                        fill="hsl(var(--text-muted))" 
-                        fontSize="0.75rem"
-                        textAnchor="end"
-                        fontWeight={rankVal <= 3 ? "bold" : "normal"}
-                      >
-                        {rankVal === 1 ? "🏆 1" : rankVal === 2 ? "🥈 2" : rankVal === 3 ? "🥉 3" : rankVal}
-                      </text>
-                    </g>
-                  );
-                })}
+            {filteredMatches.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "4rem 2rem", color: "hsl(var(--text-muted))" }}>
+                <AlertCircle size={28} style={{ marginBottom: "0.5rem", opacity: 0.5 }} />
+                <p>No hay partidos jugados registrados en esta ronda todavía.</p>
+              </div>
+            ) : (
+              <div style={{ position: "relative", width: "100%" }}>
+                <svg 
+                  viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
+                  className="bump-chart-svg"
+                  style={{ width: "100%", height: "auto", overflow: "visible" }}
+                >
+                  <defs>
+                    <linearGradient id="grid-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="rgba(255,255,255,0.05)" />
+                      <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                    </linearGradient>
+                  </defs>
 
-                {/* X Axis Grid Lines & Labels */}
-                {Array.from({ length: totalSteps }).map((_, stepIdx) => {
-                  const x = getX(stepIdx);
-                  const isStart = stepIdx === 0;
-                  const match = isStart ? null : matches[stepIdx - 1];
-                  const label = isStart ? "Inicio" : match.label;
-                  
-                  return (
-                    <g key={stepIdx} className="grid-group">
-                      <line 
-                        x1={x} 
-                        y1={paddingTop} 
-                        x2={x} 
-                        y2={svgHeight - paddingBottom} 
-                        stroke="rgba(255, 255, 255, 0.05)"
-                      />
-                      <text 
-                        x={x} 
-                        y={svgHeight - paddingBottom + 20} 
-                        fill="hsl(var(--text-muted))" 
-                        fontSize="0.7rem"
-                        textAnchor="middle"
-                        transform={`rotate(-25, ${x}, ${svgHeight - paddingBottom + 20})`}
-                      >
-                        {label}
-                      </text>
-                    </g>
-                  );
-                })}
+                  {/* Y Axis Grid Lines & Labels */}
+                  {Array.from({ length: 10 }).map((_, i) => {
+                    const rankVal = i + 1;
+                    const y = getY(rankVal);
+                    return (
+                      <g key={i} className="grid-group">
+                        <line 
+                          x1={paddingLeft} 
+                          y1={y} 
+                          x2={svgWidth - paddingRight} 
+                          y2={y} 
+                          stroke="rgba(255, 255, 255, 0.05)" 
+                          strokeDasharray="4"
+                        />
+                        <text 
+                          x={paddingLeft - 15} 
+                          y={y + 4} 
+                          fill="hsl(var(--text-muted))" 
+                          fontSize="0.75rem"
+                          textAnchor="end"
+                          fontWeight={rankVal <= 3 ? "bold" : "normal"}
+                        >
+                          {rankVal === 1 ? "🏆 1" : rankVal === 2 ? "🥈 2" : rankVal === 3 ? "🥉 3" : rankVal}
+                        </text>
+                      </g>
+                    );
+                  })}
 
-                {/* Background lines for non-highlighted selected participants */}
-                {selectedParticipants.map((p) => {
-                  const colorIdx = history.findIndex(h => h.id === p.id);
-                  const color = `hsl(${(colorIdx * 137.5) % 360}, 80%, 60%)`;
-                  const isHighlighted = highlightedParticipantId === p.id;
-                  const isAnyHighlighted = highlightedParticipantId !== null;
-                  
-                  const points = p.ranks.map((rank, stepIdx) => ({
-                    x: getX(stepIdx),
-                    y: getY(rank),
-                    rank,
-                    stepIdx
-                  }));
+                  {/* X Axis Grid Lines & Labels */}
+                  {filteredMatches.map((match, filterIdx) => {
+                    const x = getX(filterIdx);
+                    return (
+                      <g key={match.id} className="grid-group">
+                        <line 
+                          x1={x} 
+                          y1={paddingTop} 
+                          x2={x} 
+                          y2={svgHeight - paddingBottom} 
+                          stroke="rgba(255, 255, 255, 0.03)"
+                        />
+                        <text 
+                          x={x} 
+                          y={svgHeight - paddingBottom + 20} 
+                          fill="hsl(var(--text-muted))" 
+                          fontSize="0.7rem"
+                          textAnchor="middle"
+                          transform={`rotate(-25, ${x}, ${svgHeight - paddingBottom + 20})`}
+                        >
+                          {match.label}
+                        </text>
+                      </g>
+                    );
+                  })}
 
-                  return (
-                    <path
-                      key={p.id}
-                      d={getBezierPath(points)}
-                      fill="none"
-                      stroke={color}
-                      strokeWidth={isHighlighted ? 4 : isAnyHighlighted ? 1 : 2}
-                      opacity={isHighlighted ? 1 : isAnyHighlighted ? 0.15 : 0.65}
-                      strokeLinecap="round"
-                      style={{ transition: "stroke-width 0.2s, opacity 0.2s" }}
-                      onMouseEnter={() => setHighlightedParticipantId(p.id)}
-                      onMouseLeave={() => setHighlightedParticipantId(null)}
-                    />
-                  );
-                })}
-
-                {/* Render interactive dots & hover triggers on top */}
-                {selectedParticipants.map((p) => {
-                  const colorIdx = history.findIndex(h => h.id === p.id);
-                  const color = `hsl(${(colorIdx * 137.5) % 360}, 80%, 60%)`;
-                  const isHighlighted = highlightedParticipantId === p.id;
-                  const isAnyHighlighted = highlightedParticipantId !== null;
-                  const showDots = isHighlighted || !isAnyHighlighted;
-
-                  return p.ranks.map((rank, stepIdx) => {
-                    const x = getX(stepIdx);
-                    const y = getY(rank);
-                    const isStart = stepIdx === 0;
-                    const match = isStart ? null : matches[stepIdx - 1];
-                    const pts = p.points[stepIdx];
+                  {/* Background lines for non-highlighted selected participants */}
+                  {selectedParticipants.map((p) => {
+                    const colorIdx = history.findIndex(h => h.id === p.id);
+                    const color = `hsl(${(colorIdx * 137.5) % 360}, 80%, 60%)`;
+                    const isHighlighted = highlightedParticipantId === p.id;
+                    const isAnyHighlighted = highlightedParticipantId !== null;
+                    
+                    const points = filteredMatches.map((match, filterIdx) => ({
+                      x: getX(filterIdx),
+                      y: getY(p.ranks[match.originalIdx]),
+                      rank: p.ranks[match.originalIdx],
+                      filterIdx
+                    }));
 
                     return (
-                      <g key={`${p.id}_${stepIdx}`}>
-                        {/* Visible Dot */}
-                        {showDots && (
+                      <path
+                        key={p.id}
+                        d={getBezierPath(points)}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth={isHighlighted ? 3.5 : 1.5}
+                        opacity={isHighlighted ? 1.0 : isAnyHighlighted ? 0.08 : 0.35}
+                        strokeLinecap="round"
+                        style={{ transition: "stroke-width 0.2s, opacity 0.2s" }}
+                        onMouseEnter={() => setHighlightedParticipantId(p.id)}
+                        onMouseLeave={() => setHighlightedParticipantId(null)}
+                      />
+                    );
+                  })}
+
+                  {/* Render interactive dots & hover triggers on top */}
+                  {selectedParticipants.map((p) => {
+                    const colorIdx = history.findIndex(h => h.id === p.id);
+                    const color = `hsl(${(colorIdx * 137.5) % 360}, 80%, 60%)`;
+                    const isHighlighted = highlightedParticipantId === p.id;
+
+                    return filteredMatches.map((match, filterIdx) => {
+                      const x = getX(filterIdx);
+                      const rank = p.ranks[match.originalIdx];
+                      const y = getY(rank);
+                      const pts = p.points[match.originalIdx];
+
+                      return (
+                        <g key={`${p.id}_${match.id}`}>
+                          {/* Dot - Only visible if this participant is highlighted */}
+                          {isHighlighted && (
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r={5}
+                              fill="hsl(var(--background))"
+                              stroke={color}
+                              strokeWidth={3}
+                              opacity={1}
+                              style={{ pointerEvents: "none" }}
+                            />
+                          )}
+
+                          {/* Interactive Large Circle for Tooltip */}
                           <circle
                             cx={x}
                             cy={y}
-                            r={isHighlighted ? 5 : 3.5}
-                            fill="hsl(var(--background))"
-                            stroke={color}
-                            strokeWidth={isHighlighted ? 3 : 2}
-                            opacity={isHighlighted ? 1 : 0.8}
-                            style={{ pointerEvents: "none" }}
+                            r={12}
+                            fill="transparent"
+                            cursor="pointer"
+                            onMouseEnter={(e) => {
+                              setHighlightedParticipantId(p.id);
+                              const svgRect = e.target.ownerSVGElement.getBoundingClientRect();
+                              const targetRect = e.target.getBoundingClientRect();
+                              setHoveredPoint({
+                                x: targetRect.left - svgRect.left + 12,
+                                y: targetRect.top - svgRect.top - 10,
+                                rank,
+                                points: pts,
+                                matchName: match.name,
+                                matchLabel: match.label,
+                                participantName: p.name,
+                                color
+                              });
+                            }}
+                            onMouseLeave={() => {
+                              setHighlightedParticipantId(null);
+                              setHoveredPoint(null);
+                            }}
                           />
-                        )}
+                        </g>
+                      );
+                    });
+                  })}
+                </svg>
 
-                        {/* Interactive Large Circle for Tooltip */}
-                        <circle
-                          cx={x}
-                          cy={y}
-                          r={12}
-                          fill="transparent"
-                          cursor="pointer"
-                          onMouseEnter={(e) => {
-                            setHighlightedParticipantId(p.id);
-                            const svgRect = e.target.ownerSVGElement.getBoundingClientRect();
-                            const targetRect = e.target.getBoundingClientRect();
-                            setHoveredPoint({
-                              x: targetRect.left - svgRect.left + 12,
-                              y: targetRect.top - svgRect.top - 10,
-                              rank,
-                              points: pts,
-                              matchName: isStart ? "Inicio del torneo" : match.name,
-                              matchLabel: isStart ? "Inicio" : match.label,
-                              participantName: p.name,
-                              color
-                            });
-                          }}
-                          onMouseLeave={() => {
-                            setHighlightedParticipantId(null);
-                            setHoveredPoint(null);
-                          }}
-                        />
-                      </g>
-                    );
-                  });
-                })}
-              </svg>
-
-              {/* Tooltip Overlay */}
-              {hoveredPoint && (
-                <div 
-                  className="chart-tooltip"
-                  style={{
-                    position: "absolute",
-                    left: `${hoveredPoint.x}px`,
-                    top: `${hoveredPoint.y}px`,
-                    transform: "translate(-50%, -100%)",
-                    backgroundColor: "hsl(var(--card))",
-                    border: `1px solid ${hoveredPoint.color}`,
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.4), 0 0 10px rgba(255,255,255,0.05)",
-                    padding: "0.6rem 0.9rem",
-                    borderRadius: "8px",
-                    zIndex: 100,
-                    pointerEvents: "none",
-                    minWidth: "150px",
-                    fontSize: "0.8rem",
-                    color: "hsl(var(--text))"
-                  }}
-                >
-                  <div style={{ fontWeight: "bold", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "0.25rem", marginBottom: "0.25rem", color: hoveredPoint.color }}>
-                    {hoveredPoint.participantName}
+                {/* Tooltip Overlay */}
+                {hoveredPoint && (
+                  <div 
+                    className="chart-tooltip"
+                    style={{
+                      position: "absolute",
+                      left: `${hoveredPoint.x}px`,
+                      top: `${hoveredPoint.y}px`,
+                      transform: "translate(-50%, -100%)",
+                      backgroundColor: "hsl(var(--card))",
+                      border: `1px solid ${hoveredPoint.color}`,
+                      boxShadow: "0 4px 20px rgba(0,0,0,0.4), 0 0 10px rgba(255,255,255,0.05)",
+                      padding: "0.6rem 0.9rem",
+                      borderRadius: "8px",
+                      zIndex: 100,
+                      pointerEvents: "none",
+                      minWidth: "150px",
+                      fontSize: "0.8rem",
+                      color: "hsl(var(--text))"
+                    }}
+                  >
+                    <div style={{ fontWeight: "bold", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "0.25rem", marginBottom: "0.25rem", color: hoveredPoint.color }}>
+                      {hoveredPoint.participantName}
+                    </div>
+                    <div>Partido: <span style={{ color: "hsl(var(--text-muted))" }}>{hoveredPoint.matchName} ({hoveredPoint.matchLabel})</span></div>
+                    <div>Puesto: <strong>#{hoveredPoint.rank}</strong></div>
+                    <div>Puntos acumulados: <strong style={{ color: "hsl(var(--accent))" }}>{hoveredPoint.points} pts</strong></div>
                   </div>
-                  <div>Partido: <span style={{ color: "hsl(var(--text-muted))" }}>{hoveredPoint.matchName} ({hoveredPoint.matchLabel})</span></div>
-                  <div>Puesto: <strong>#{hoveredPoint.rank}</strong></div>
-                  <div>Puntos acumulados: <strong style={{ color: "hsl(var(--accent))" }}>{hoveredPoint.points} pts</strong></div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Sidebar Legend Panel */}
           <div className="legend-panel-card">
             <h3 className="legend-title">Participantes</h3>
             <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.75rem", marginBottom: "1rem" }}>
-              Selecciona para mostrar en la gráfica (límite recomendado: 10).
+              Selecciona para mostrar en la leyenda (límite recomendado: 10).
             </p>
 
             <div className="legend-actions">
@@ -875,8 +908,8 @@ export default function App() {
                 const colorIdx = history.findIndex(h => h.id === p.id);
                 const color = `hsl(${(colorIdx * 137.5) % 360}, 80%, 60%)`;
                 const isSelected = selectedParticipantsMap[p.id];
-                const finalRank = p.ranks[p.ranks.length - 1];
-                const pts = p.points[p.points.length - 1];
+                const finalRank = p.ranks.length > 0 ? p.ranks[p.ranks.length - 1] : 1;
+                const pts = p.points.length > 0 ? p.points[p.points.length - 1] : 0;
 
                 return (
                   <label 

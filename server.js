@@ -382,8 +382,8 @@ app.get("/api/leaderboard/history", async (req, res) => {
     const historyData = participants.map((p) => ({
       id: p.id,
       name: p.name,
-      points: [0], // Step 0 points
-      ranks: [1]   // Step 0 rank
+      points: [], // Start empty
+      ranks: []   // Start empty
     }));
 
     // Step-by-step points computation
@@ -415,7 +415,7 @@ app.get("/api/leaderboard/history", async (req, res) => {
             );
           }
         }
-        const prevPoints = p.points[p.points.length - 1];
+        const prevPoints = p.points.length > 0 ? p.points[p.points.length - 1] : 0;
         p.points.push(prevPoints + matchPoints);
       });
 
