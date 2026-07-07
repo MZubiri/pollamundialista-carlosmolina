@@ -613,16 +613,18 @@ export default function App() {
 
     // Dimensions
     const svgWidth = 850;
-    const svgHeight = 480;
+    const svgHeight = 500;
     const paddingLeft = 60;
     const paddingRight = 30;
     const paddingTop = 30;
-    const paddingBottom = 50;
+    const paddingBottom = 65;
 
     const chartWidth = svgWidth - paddingLeft - paddingRight;
     const chartHeight = svgHeight - paddingTop - paddingBottom;
 
     const maxRank = Math.max(10, history.length); 
+
+    const labelInterval = Math.ceil(filteredMatches.length / 15);
 
     const getX = (filterIdx) => {
       if (filteredMatches.length <= 1) return paddingLeft + chartWidth / 2;
@@ -726,6 +728,7 @@ export default function App() {
                   {/* X Axis Grid Lines & Labels */}
                   {filteredMatches.map((match, filterIdx) => {
                     const x = getX(filterIdx);
+                    const showLabel = filterIdx % labelInterval === 0 || filterIdx === filteredMatches.length - 1;
                     return (
                       <g key={match.id} className="grid-group">
                         <line 
@@ -735,16 +738,18 @@ export default function App() {
                           y2={svgHeight - paddingBottom} 
                           stroke="rgba(255, 255, 255, 0.03)"
                         />
-                        <text 
-                          x={x} 
-                          y={svgHeight - paddingBottom + 20} 
-                          fill="hsl(var(--text-muted))" 
-                          fontSize="0.7rem"
-                          textAnchor="middle"
-                          transform={`rotate(-25, ${x}, ${svgHeight - paddingBottom + 20})`}
-                        >
-                          {match.label}
-                        </text>
+                        {showLabel && (
+                          <text 
+                            x={x} 
+                            y={svgHeight - paddingBottom + 20} 
+                            fill="hsl(var(--text-muted))" 
+                            fontSize="0.7rem"
+                            textAnchor="middle"
+                            transform={`rotate(-25, ${x}, ${svgHeight - paddingBottom + 20})`}
+                          >
+                            {match.label}
+                          </text>
+                        )}
                       </g>
                     );
                   })}
@@ -841,34 +846,42 @@ export default function App() {
                 </svg>
 
                 {/* Tooltip Overlay */}
-                {hoveredPoint && (
-                  <div 
-                    className="chart-tooltip"
-                    style={{
-                      position: "absolute",
-                      left: `${hoveredPoint.x}px`,
-                      top: `${hoveredPoint.y}px`,
-                      transform: "translate(-50%, -100%)",
-                      backgroundColor: "hsl(var(--card))",
-                      border: `1px solid ${hoveredPoint.color}`,
-                      boxShadow: "0 4px 20px rgba(0,0,0,0.4), 0 0 10px rgba(255,255,255,0.05)",
-                      padding: "0.6rem 0.9rem",
-                      borderRadius: "8px",
-                      zIndex: 100,
-                      pointerEvents: "none",
-                      minWidth: "150px",
-                      fontSize: "0.8rem",
-                      color: "hsl(var(--text))"
-                    }}
-                  >
-                    <div style={{ fontWeight: "bold", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "0.25rem", marginBottom: "0.25rem", color: hoveredPoint.color }}>
-                      {hoveredPoint.participantName}
+                {hoveredPoint && (() => {
+                  let transformStr = "translate(-50%, -100%)";
+                  if (hoveredPoint.x < 150) {
+                    transformStr = "translate(-10%, -100%)";
+                  } else if (hoveredPoint.x > 700) {
+                    transformStr = "translate(-90%, -100%)";
+                  }
+                  return (
+                    <div 
+                      className="chart-tooltip"
+                      style={{
+                        position: "absolute",
+                        left: `${hoveredPoint.x}px`,
+                        top: `${hoveredPoint.y}px`,
+                        transform: transformStr,
+                        backgroundColor: "hsl(var(--card))",
+                        border: `1px solid ${hoveredPoint.color}`,
+                        boxShadow: "0 4px 20px rgba(0,0,0,0.4), 0 0 10px rgba(255,255,255,0.05)",
+                        padding: "0.6rem 0.9rem",
+                        borderRadius: "8px",
+                        zIndex: 100,
+                        pointerEvents: "none",
+                        minWidth: "150px",
+                        fontSize: "0.8rem",
+                        color: "hsl(var(--text))"
+                      }}
+                    >
+                      <div style={{ fontWeight: "bold", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "0.25rem", marginBottom: "0.25rem", color: hoveredPoint.color }}>
+                        {hoveredPoint.participantName}
+                      </div>
+                      <div>Partido: <span style={{ color: "hsl(var(--text-muted))" }}>{hoveredPoint.matchName} ({hoveredPoint.matchLabel})</span></div>
+                      <div>Puesto: <strong>#{hoveredPoint.rank}</strong></div>
+                      <div>Puntos acumulados: <strong style={{ color: "hsl(var(--accent))" }}>{hoveredPoint.points} pts</strong></div>
                     </div>
-                    <div>Partido: <span style={{ color: "hsl(var(--text-muted))" }}>{hoveredPoint.matchName} ({hoveredPoint.matchLabel})</span></div>
-                    <div>Puesto: <strong>#{hoveredPoint.rank}</strong></div>
-                    <div>Puntos acumulados: <strong style={{ color: "hsl(var(--accent))" }}>{hoveredPoint.points} pts</strong></div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
           </div>
