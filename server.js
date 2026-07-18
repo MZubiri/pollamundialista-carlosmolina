@@ -14,7 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const KNOCKOUT_DEADLINE =
   process.env.KNOCKOUT_PREDICTIONS_DEADLINE || "2026-08-14T14:00:00-05:00";
-const KNOCKOUT_FIXTURE_VERSION = "semifinales_2026_07_14_v1";
+const KNOCKOUT_FIXTURE_VERSION = "final_2026_07_18_v1";
 
 app.use(cors());
 app.use(express.json());
@@ -85,6 +85,8 @@ const defaultKnockoutMatches = [
   { id: 100, stage: "Cuartos", match_order: 28, home_team: "Argentina", away_team: "Suiza" },
   { id: 101, stage: "Semifinales", match_order: 29, home_team: "Francia", away_team: "España" },
   { id: 102, stage: "Semifinales", match_order: 30, home_team: "Inglaterra", away_team: "Argentina" },
+  { id: 103, stage: "Tercer Puesto", match_order: 31, home_team: "Francia", away_team: "Inglaterra" },
+  { id: 104, stage: "Final", match_order: 32, home_team: "España", away_team: "Argentina" },
 ];
 
 async function getKnockoutDeadline() {
@@ -362,7 +364,7 @@ app.get("/api/leaderboard/history", async (req, res) => {
       .map((m) => ({
         id: m.id,
         isKnockout: true,
-        label: `${m.stage === "Dieciseisavos" ? "D" : m.stage === "Octavos" ? "O" : m.stage === "Cuartos" ? "C" : m.stage === "Semifinales" ? "S" : "F"}${m.match_order || m.id}`,
+        label: `${m.stage === "Dieciseisavos" ? "D" : m.stage === "Octavos" ? "O" : m.stage === "Cuartos" ? "C" : m.stage === "Semifinales" ? "S" : m.stage === "Tercer Puesto" ? "T" : "F"}${m.match_order || m.id}`,
         name: `${m.home_team} vs ${m.away_team}`,
         stage: m.stage
       }));
